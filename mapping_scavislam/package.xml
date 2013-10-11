@@ -1,0 +1,15 @@
+<package>
+    <name>mapping_scavislam</name>
+    <version>0.1.0</version>
+    <description>
+        Mapping using Double Window Optimization, based on ScaViSLAM.
+    </description>
+    <maintainer email="contradict@gmail.com">contradict</maintainer>
+    <license>LGPL</license>
+
+    <buildtool_depend>catkin</buildtool_depend>
+
+    <export>
+        <metapackage/>
+    </export>
+</package>

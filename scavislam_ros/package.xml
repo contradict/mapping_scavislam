@@ -1,0 +1,13 @@
+<package>
+    <name>scavislam_ros</name>
+    <version>0.1.0</version>
+    <description>ROS components to communicate with ScaViSLAM library</description>
+    <maintainer email="contradict@gmail.com">contradict</maintainer>
+    <license>LGPL</license>
+
+    <buildtool_depend>catkin</buildtool_depend>
+
+    <build_depend>ScaViSLAM</build_depend>
+
+    <run_depend>ScaViSLAM</run_depend>
+</package>

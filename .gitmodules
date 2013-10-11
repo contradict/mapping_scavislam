@@ -1,0 +1,12 @@
+[submodule "VisionTools"]
+	path = VisionTools
+	url = git://github.com/contradict/VisionTools.git
+[submodule "Sophus"]
+	path = Sophus
+	url = git://github.com/contradict/Sophus.git
+[submodule "Pangolin"]
+	path = Pangolin
+	url = git://github.com/contradict/Pangolin.git
+[submodule "ScaViSLAM"]
+	path = ScaViSLAM
+	url = git://github.com/contradict/ScaViSLAM.git
