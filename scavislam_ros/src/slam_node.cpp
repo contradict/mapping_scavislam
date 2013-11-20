@@ -78,6 +78,7 @@ class StereoVSLAMNode
         boost::recursive_mutex config_mutex_;
         typedef stereo_vslam_node::StereoVSLAMConfig Config;
         typedef dynamic_reconfigure::Server<Config> ReconfigureServer;
+        Config config;
         boost::shared_ptr<ReconfigureServer> reconfigure_server_;
 
         // Processing state (note: only safe because we're single-threaded!)
@@ -136,19 +137,25 @@ StereoVSLAMNode::~StereoVSLAMNode()
 void StereoVSLAMNode::InitROS()
 {
     ros::NodeHandle nh;
-    ros::NodeHandle private_nh;
+    ros::NodeHandle private_nh("~");
 
     it_.reset(new image_transport::ImageTransport(nh));
 
+    // Set up dynamic reconfiguration
+    ReconfigureServer::CallbackType f = boost::bind(&StereoVSLAMNode::configCb,
+            this, _1, _2);
+    reconfigure_server_.reset(new ReconfigureServer(config_mutex_, private_nh));
+    reconfigure_server_->setCallback(f);
+
+    private_nh.param("wordspath", config.wordspath, string("data/surfwords10000.png"));
     // Synchronize inputs. Topic subscriptions happen on demand in the connection
     // callback. Optionally do approximate synchronization.
-    int queue_size;
-    private_nh.param("queue_size", queue_size, 5);
+    private_nh.param("queue_size", config.queue_size, 5);
     bool approx;
-    private_nh.param("approximate_sync", approx, false);
-    if (approx)
+    private_nh.param("approximate_sync", config.approximate_sync, false);
+    if (config.approximate_sync)
     {
-        approximate_sync_.reset( new ApproximateSync(ApproximatePolicy(queue_size),
+        approximate_sync_.reset( new ApproximateSync(ApproximatePolicy(config.queue_size),
                     sub_l_image_, sub_l_info_,
                     sub_r_image_, sub_r_info_) );
         approximate_sync_->registerCallback(boost::bind(&StereoVSLAMNode::imageCb,
@@ -156,18 +163,13 @@ void StereoVSLAMNode::InitROS()
     }
     else
     {
-        exact_sync_.reset( new ExactSync(ExactPolicy(queue_size),
+        exact_sync_.reset( new ExactSync(ExactPolicy(config.queue_size),
                     sub_l_image_, sub_l_info_,
                     sub_r_image_, sub_r_info_) );
         exact_sync_->registerCallback(boost::bind(&StereoVSLAMNode::imageCb,
                     this, _1, _2, _3, _4));
     }
 
-    // Set up dynamic reconfiguration
-    ReconfigureServer::CallbackType f = boost::bind(&StereoVSLAMNode::configCb,
-            this, _1, _2);
-    reconfigure_server_.reset(new ReconfigureServer(config_mutex_, private_nh));
-    reconfigure_server_->setCallback(f);
 
     pub_disparity_ = nh.advertise<DisparityImage>("disparity", 1 );
     pub_neighborhood_points_ = nh.advertise<sensor_msgs::PointCloud2>("neighborhood_points", 1);
@@ -231,7 +233,7 @@ void StereoVSLAMNode::InitVSLAM()
         new StereoFrontend(frame_data, per_mon);
     frontend->initialize();
 
-    pla_reg = new PlaceRecognizer(stereo_camera);
+    pla_reg = new PlaceRecognizer(stereo_camera, config.wordspath);
     backend
         = new Backend(frame_data->cam_vec,
                 &pla_reg->monitor);
@@ -280,9 +282,13 @@ processNextFrame(cv::Mat image_l, cv::Mat image_r)
 
 }
 
-void StereoVSLAMNode::configCb(Config &config, uint32_t level)
+void StereoVSLAMNode::configCb(Config &newconfig, uint32_t level)
 {
-
+    config = newconfig;
+    ROS_INFO("New configuration:\n  wordspath: %s\n  queue_size: %d\n  approximate_sync: %d",
+            config.wordspath.c_str(),
+            config.queue_size,
+            config.approximate_sync);
 }
 
 void StereoVSLAMNode::imageCb(
