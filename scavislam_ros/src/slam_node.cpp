@@ -304,7 +304,6 @@ void StereoVSLAMNode::imageCb(
         const ImageConstPtr& r_image_msg,
         const CameraInfoConstPtr& r_info_msg)
 {
-    per_mon->new_frame();
     /// @todo Convert (share) with new cv_bridge
     assert(l_image_msg->encoding == sensor_msgs::image_encodings::MONO8);
     assert(r_image_msg->encoding == sensor_msgs::image_encodings::MONO8);
@@ -330,8 +329,11 @@ void StereoVSLAMNode::imageCb(
         backend->monitor
             .pushKeyframe(frontend->to_optimizer_stack.top());
         frontend->to_optimizer_stack.pop();
+        ROS_DEBUG("Initialized first frame");
         return;
     }
+    ROS_DEBUG("Processing frame");
+    per_mon->new_frame();
 
     float ui_fps = per_mon->fps();
     processNextFrame(l_image, r_image);
@@ -363,12 +365,6 @@ void StereoVSLAMNode::imageCb(
     }
     DetectedLoop loop;
     bool is_loop_detected = backend->monitor.getClosedLoop(&loop);
-    /*
-    if (is_loop_detected)
-    {
-        best_match = loop.loop_keyframe_id;
-    }
-    */
 }
 
 
