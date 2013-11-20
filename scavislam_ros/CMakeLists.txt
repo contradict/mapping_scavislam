@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(scavislam_ros)
 
+set(CMAKE_BUILD_TYPE RelWithDebInfo)
+
 SET(CMAKE_VERBOSE_MAKEFILE ON)
 
 find_package(catkin REQUIRED
