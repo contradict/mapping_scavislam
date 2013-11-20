@@ -223,16 +223,12 @@ void StereoVSLAMNode::InitVSLAM()
     frame_data = new FrameData<StereoCamera>(stereo_camera);
 
   dx_filter_ =
-      cv::gpu::createDerivFilter_GPU(frame_data->cur_left()
-                                     .gpu_pyr_float32[0].type(),
-                                     frame_data->gpu_pyr_float32_dx[0]
-                                     .type(),
+      cv::gpu::createDerivFilter_GPU(CV_32F,
+                                     CV_32F,
                                      1, 0, 1, cv::BORDER_REPLICATE);
   dy_filter_ =
-      cv::gpu::createDerivFilter_GPU(frame_data->cur_left()
-                                     .gpu_pyr_float32[0].type(),
-                                     frame_data->gpu_pyr_float32_dy[0]
-                                     .type(),
+      cv::gpu::createDerivFilter_GPU(CV_32F,
+                                     CV_32F,
                                      0, 1, 1, cv::BORDER_REPLICATE);
 
 
