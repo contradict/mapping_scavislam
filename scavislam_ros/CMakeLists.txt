@@ -9,9 +9,15 @@ find_package(catkin REQUIRED
     COMPONENTS
         dynamic_reconfigure
         ScaViSLAM
+        image_geometry
+        image_transport
+        cv_bridge
+        pcl_ros
     )
 
 find_package(CUDA REQUIRED)
+SET (OpenCV_DIR /usr/local/share/OpenCV)
+find_package(OpenCV 2.4.7 REQUIRED)
 
 # dynamic reconfigure
 generate_dynamic_reconfigure_options(

@@ -11,9 +11,11 @@
     <build_depend>dynamic_reconfigure</build_depend>
     <build_depend>image_transport</build_depend>
     <build_depend>image_geometry</build_depend>
+    <build_depend>cv_bridge</build_depend>
 
     <run_depend>ScaViSLAM</run_depend>
     <run_depend>dynamic_reconfigure</run_depend>
     <run_depend>image_transport</run_depend>
     <run_depend>image_geometry</run_depend>
+    <run_depend>cv_bridge</run_depend>
 </package>
