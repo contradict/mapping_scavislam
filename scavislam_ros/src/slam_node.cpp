@@ -25,8 +25,9 @@
 
 #include <tf/transform_broadcaster.h>
 
-//#include <pcl_ros/point_cloud.h>
-//#include <pcl/point_types.h>
+#include <pcl_ros/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
 
 
 #include <opencv2/calib3d/calib3d.hpp>
@@ -103,6 +104,10 @@ class StereoVSLAMNode
         void fillDisparityGpu(DisparityImagePtr disp_msg);
         void publishDisparity(
                 const ImageConstPtr& l_image_msg,
+                const CameraInfoConstPtr& l_info_msg
+                );
+        void publishNeighborhood(
+                const NeighborhoodPtr neighborhood,
                 const CameraInfoConstPtr& l_info_msg
                 );
 
@@ -339,7 +344,7 @@ void StereoVSLAMNode::imageCb(
                 != neighborhood->vertex_map.end())
         {
             frontend->neighborhood() = neighborhood;
-
+            publishNeighborhood(neighborhood, l_info_msg);
         }
     }
     bool is_frame_droped = false;
@@ -419,6 +424,50 @@ void StereoVSLAMNode::publishDisparity(
        cv::subtract(disp_image, cv::Scalar(cx_l - cx_r), disp_image);
        */
     pub_disparity_.publish(disp_msg);
+}
+
+void StereoVSLAMNode::publishNeighborhood(
+        const NeighborhoodPtr neighborhood,
+        const CameraInfoConstPtr& l_info_msg
+        )
+{
+    pcl::PointCloud<pcl::PointXYZ> neighborhood_cloud;
+
+    for (list<CandidatePoint3Ptr>::const_iterator
+         it=neighborhood->point_list.begin();
+         it!=neighborhood->point_list.end(); ++it)
+    {
+      const CandidatePoint3Ptr & ap = *it;
+      Eigen::Vector3d pt(GET_MAP_ELEM(ap->anchor_id, neighborhood->vertex_map).T_me_from_w.inverse()
+                      *ap->xyz_anchor);
+      neighborhood_cloud.push_back(pcl::PointXYZ(pt(0), pt(1), pt(2)));
+    }
+    /*
+    Draw3d::points(points,2);
+    for (ALIGNED<FrontendVertex>::int_hash_map::const_iterator
+         it=neighborhood->vertex_map.begin();
+         it!=neighborhood->vertex_map.end(); ++it)
+    {
+      SE3d T1 = it->second.T_me_from_w.inverse();
+      Draw3d::pose(T1);
+
+      for (multimap<int,int>::const_iterator it2 =
+           it->second.strength_to_neighbors.begin();
+           it2 != it->second.strength_to_neighbors.end(); ++it2)
+      {
+        SE3d T2 = GET_MAP_ELEM(it2->second,
+                              neighborhood->vertex_map)
+            .T_me_from_w.inverse();
+        Draw3d::line(T1.translation(), T2.translation());
+      }
+    }
+    */
+    pcl::PCLPointCloud2 pub_cloud;
+    pcl::toPCLPointCloud2(neighborhood_cloud, pub_cloud);
+    pub_cloud.header.seq = l_info_msg->header.seq;
+    pub_cloud.header.stamp = l_info_msg->header.stamp.toNSec();
+    pub_cloud.header.frame_id = l_info_msg->header.frame_id;
+    pub_neighborhood_points_.publish(pub_cloud);
 }
 
 } // namespace stereo_vslam_node
