@@ -1,0 +1,114 @@
+<?xml version="1.0"?>
+<!-- vim: set fenc=utf-8 et sts=4 ft=xml : -->
+<launch>
+    <arg name="bag"/>
+
+    <node
+        pkg="nodelet"
+        type="nodelet"
+        name="image_proc_manager"
+        args="manager"
+        output="log"
+        />
+    <!-- Debayer -->
+    <node
+          pkg="nodelet"
+          type="nodelet"
+          name="debayer"
+          args="load image_proc/debayer /image_proc_manager"
+          ns="left"
+          output="log"
+          >
+    </node>
+    <node
+          pkg="nodelet"
+          type="nodelet"
+          name="debayer"
+          args="load image_proc/debayer /image_proc_manager"
+          ns="right"
+          output="log"
+          >
+    </node>
+
+    <!-- Rectify images -->
+    <node
+        pkg="nodelet"
+        type="nodelet"
+        name="rect"
+        args="load image_proc/rectify /image_proc_manager"
+        ns="left"
+        output="log"
+        >
+    </node>
+    <node
+        pkg="nodelet"
+        type="nodelet"
+        name="rect_color"
+        args="load image_proc/rectify /image_proc_manager"
+        ns="left"
+        output="log"
+        >
+        <remap from="image_mono" to="image_color"/>
+        <remap from="image_rect" to="image_rect_color"/>
+    </node>
+    <node
+        pkg="nodelet"
+        type="nodelet"
+        name="rect"
+        args="load image_proc/rectify /image_proc_manager"
+        ns="right"
+        output="log"
+        >
+    </node>
+    <node
+        pkg="nodelet"
+        type="nodelet"
+        name="rect_color"
+        args="load image_proc/rectify /mimage_proc_anager"
+        ns="right"
+        output="log"
+        >
+        <remap from="image_mono" to="image_color"/>
+        <remap from="image_rect" to="image_rect_color"/>
+    </node>
+
+    <!-- Compute Stereo -->
+    <node
+        pkg="nodelet"
+        type="nodelet"
+        name="stereo_image_disparity"
+        args="load stereo_image_proc/disparity /image_proc_manager"
+        output="log"
+        >
+        <param name="correlation_window_size" type="int" value="17"/>
+        <param name="min_disparity" type="int" value="0"/>
+        <param name="disparity_range" type="int" value="128"/>
+        <param name="uniqueness_ratio" type="int" value="5"/>
+        <param name="texture_threshold" type="int" value="1000"/>
+        <param name="approximate_sync" type="bool" value="true"/>
+    </node>
+
+    <!-- Compute Stereo Point Cloud -->
+    <node
+        pkg="nodelet"
+        type="nodelet"
+        name="stereo_image_points"
+        args="load stereo_image_proc/point_cloud2 /image_proc_manager"
+        output="log"
+        >
+        <param name="approximate_sync" type="bool" value="true"/>
+    </node>
+
+    <node
+        pkg="rosbag"
+        type="play"
+        name="replay"
+        args="$(arg bag) --topics navigation/left/camera_info navigation/left/image_raw navigation/right/camera_info navigation/right/image_raw"
+        output="screen"
+        >
+        <remap from="/navigation/left/camera_info" to="left/camera_info"/>
+        <remap from="/navigation/left/image_raw" to="left/image_raw"/>
+        <remap from="/navigation/right/camera_info" to="right/camera_info"/>
+        <remap from="/navigation/right/image_raw" to="right/image_raw"/>
+    </node>
+</launch>
