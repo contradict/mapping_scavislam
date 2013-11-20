@@ -9,8 +9,11 @@
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/exact_time.h>
 #include <message_filters/sync_policies/approximate_time.h>
+#include <cv_bridge/cv_bridge.h>
 
 #include <image_geometry/stereo_camera_model.h>
+
+#include <visiontools/accessor_macros.h>
 
 #include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -170,8 +173,7 @@ void StereoVSLAMNode::InitROS()
                     this, _1, _2, _3, _4));
     }
 
-
-    pub_disparity_ = nh.advertise<DisparityImage>("disparity", 1 );
+    pub_disparity_ = nh.advertise<DisparityImage>("gpu_disparity", 1 );
     pub_neighborhood_points_ = nh.advertise<sensor_msgs::PointCloud2>("neighborhood_points", 1);
     pub_pose_history_ = nh.advertise<nav_msgs::Path>("path", 1);
 
@@ -403,9 +405,11 @@ void StereoVSLAMNode::publishDisparity(
     disp_msg->max_disparity = minDisparity + num_disparities - 1;
     disp_msg->delta_d = 1.0 / 16; // OpenCV uses 16 disparities per pixel
 
-    memcpy(reinterpret_cast<float*>(&disp_msg->image.data[0]),
-            reinterpret_cast<float*>(&frame_data->disp.data[0]),
-            sizeof(float) * disp_msg->image.height * disp_msg->image.step);
+    cv_bridge::CvImage cv;
+    cv.image = frame_data->disp;
+    cv.toImageMsg(disp_msg->image);
+    disp_msg->image.header   = l_info_msg->header;
+    disp_msg->image.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
 
     // Adjust for any x-offset between the principal points: d' = d - (cx_l - cx_r)
     /*
