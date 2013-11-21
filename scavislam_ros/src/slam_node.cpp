@@ -36,6 +36,7 @@
 
 //#include "global.h"
 
+#undef HAVE_OPENNI
 #include "backend.h"
 #include "stereo_camera.h"
 //#include "framedata.hpp"
