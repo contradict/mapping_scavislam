@@ -58,6 +58,7 @@ class StereoVSLAMNode
         void imageCb(const ImageConstPtr& l_image_msg, const CameraInfoConstPtr& l_info_msg,
                 const ImageConstPtr& r_image_msg,const CameraInfoConstPtr& r_info_msg);
         void InitROS();
+        void Shutdown();
 
     private:
 
@@ -94,8 +95,10 @@ class StereoVSLAMNode
         FrameData<StereoCamera> *frame_data;
         StereoFrontend * frontend;
         Backend * backend;
+        boost::thread* backend_thread;
         PerformanceMonitor * per_mon;
         PlaceRecognizer * pla_reg;
+        boost::thread* placerecognizer_thread;
         bool vslam_init_;
         cv::Ptr<cv::gpu::FilterEngine_GPU> dx_filter_;
         cv::Ptr<cv::gpu::FilterEngine_GPU> dy_filter_;
@@ -240,11 +243,10 @@ void StereoVSLAMNode::InitVSLAM()
     frontend->initialize();
 
     pla_reg = new PlaceRecognizer(stereo_camera, config.wordspath);
-    backend
-        = new Backend(frame_data->cam_vec,
+    backend = new Backend(frame_data->cam_vec,
                 &pla_reg->monitor);
-    boost::thread place_reg_thread(boost::ref(*pla_reg));
-    boost::thread backend_thread(boost::ref(*backend));
+    placerecognizer_thread = new boost::thread(boost::ref(*pla_reg));
+    backend_thread = new boost::thread(boost::ref(*backend));
 
     vslam_init_ = true;
 }
@@ -505,6 +507,15 @@ void StereoVSLAMNode::publishPose(const CameraInfoConstPtr& l_info_msg)
     pub_odometry_.publish(odo);
 }
 
+
+void StereoVSLAMNode::Shutdown()
+{
+    pla_reg->stop=true;
+    placerecognizer_thread->join();
+    backend->stop=true;
+    backend_thread->join();
+}
+
 } // namespace stereo_vslam_node
 
 
@@ -526,6 +537,8 @@ int main(int argc, char** argv)
     node.InitROS();
 
     ros::spin();
+
+    node.Shutdown();
 
     return 0;
 }
