@@ -13,6 +13,7 @@ find_package(catkin REQUIRED
         image_transport
         cv_bridge
         pcl_ros
+        eigen_conversions
     )
 
 find_package(CUDA REQUIRED)

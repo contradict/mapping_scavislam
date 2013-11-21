@@ -12,13 +12,14 @@
 #include <cv_bridge/cv_bridge.h>
 
 #include <image_geometry/stereo_camera_model.h>
+#include <eigen_conversions/eigen_msg.h>
 
 #include <visiontools/accessor_macros.h>
 
 #include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <stereo_msgs/DisparityImage.h>
-#include <nav_msgs/Path.h>
+#include <nav_msgs/Odometry.h>
 
 #include <scavislam_ros/StereoVSLAMConfig.h>
 #include <dynamic_reconfigure/server.h>
@@ -74,7 +75,7 @@ class StereoVSLAMNode
         // Publications
         ros::Publisher pub_disparity_;
         ros::Publisher pub_neighborhood_points_;
-        ros::Publisher pub_pose_history_;
+        ros::Publisher pub_odometry_;
 
         tf::TransformBroadcaster pose_;
 
@@ -110,6 +111,7 @@ class StereoVSLAMNode
                 const NeighborhoodPtr neighborhood,
                 const CameraInfoConstPtr& l_info_msg
                 );
+        void publishPose(const CameraInfoConstPtr& l_info_msg);
 
         void configCb(Config &config, uint32_t level);
 };
@@ -180,7 +182,7 @@ void StereoVSLAMNode::InitROS()
 
     pub_disparity_ = nh.advertise<DisparityImage>("gpu_disparity", 1 );
     pub_neighborhood_points_ = nh.advertise<sensor_msgs::PointCloud2>("neighborhood_points", 1);
-    pub_pose_history_ = nh.advertise<nav_msgs::Path>("path", 1);
+    pub_odometry_ = nh.advertise<nav_msgs::Odometry>("odometry", 1);
 
     // Queue size 1 should be OK; the one that matters is the synchronizer queue size.
     /// @todo Allow remapping left, right?
@@ -352,6 +354,7 @@ void StereoVSLAMNode::imageCb(
     {
         return;
     }
+    publishPose(l_info_msg);
     if (is_frame_droped)
     {
         assert(frontend->to_optimizer_stack.size()==1);
@@ -460,6 +463,45 @@ void StereoVSLAMNode::publishNeighborhood(
     pub_cloud.header.stamp = l_info_msg->header.stamp.toNSec();
     pub_cloud.header.frame_id = l_info_msg->header.frame_id;
     pub_neighborhood_points_.publish(pub_cloud);
+}
+
+void StereoVSLAMNode::publishPose(const CameraInfoConstPtr& l_info_msg)
+{
+    SE3d T_cur;
+    frontend->currentPose(T_cur);
+
+    nav_msgs::Odometry odo;
+    odo.header.frame_id = l_info_msg->header.frame_id;
+    odo.child_frame_id = "odom";
+    odo.header.stamp = l_info_msg->header.stamp;
+
+    odo.twist.twist.linear.x = 0;
+    odo.twist.twist.linear.y = 0;
+    odo.twist.twist.linear.z = 0;
+    odo.twist.twist.angular.x = 0;
+    odo.twist.twist.angular.y = 0;
+    odo.twist.twist.angular.z = 0;
+
+    /*
+    for(int i=0;i<36;i++)
+    {
+        odo->pose.covariance[i] = odom_pose_covariance[i];
+        if(stopped) {
+            odo->twist.covariance[i] = odom_twist_stopped_covariance[i];
+        } else {
+            odo->twist.covariance[i] = odom_twist_covariance[i];
+        }
+    }
+    */
+
+    // fill out current position
+    odo.pose.pose.position.x = T_cur.translation()(0);
+    odo.pose.pose.position.y = T_cur.translation()(1);
+    odo.pose.pose.position.z = T_cur.translation()(2);
+    //geometry_msgs::Quaternion odom_quat =
+    //    tf::createQuaternionMsgFromYaw(T_cur.so3().unit_quaternion());
+    tf::quaternionEigenToMsg(T_cur.so3().unit_quaternion(), odo.pose.pose.orientation);
+    pub_odometry_.publish(odo);
 }
 
 } // namespace stereo_vslam_node
