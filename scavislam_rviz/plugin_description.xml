@@ -1,0 +1,10 @@
+<library path="lib/libscavislam_rviz">
+  <class name="scavislam_rviz/SLAMGraph"
+         type="scavislam_rviz::SLAMGraphDisplay"
+         base_class_type="rviz::Display">
+    <description>
+      Displays SLAM graph vertices and points with connectivity.
+    </description>
+    <message_type>scavislam_messages/SLAMGraph</message_type>
+  </class>
+</library>

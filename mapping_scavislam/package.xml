@@ -9,6 +9,9 @@
 
     <buildtool_depend>catkin</buildtool_depend>
 
+    <run_depend>scavislam_ros</run_depend>
+    <run_depend>scavislam_rviz</run_depend>
+
     <export>
         <metapackage/>
     </export>
