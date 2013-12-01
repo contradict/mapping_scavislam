@@ -20,7 +20,7 @@ def generate():
             map(lambda yaw:Quaternion(*tf.transformations.quaternion_from_euler(0,0,yaw)),
                 headings))
     poses=[ Pose(Point(*p), o) for p,o in zip(positions.T, orientations)]
-    neighbors=[(1,)]+[ (x-1, x+1) for x in range(1,len(xs))]
+    neighbors=[(1,)]+[ (x-1, x+1) for x in range(1,len(xs)-1)]+[(9,)]
     neighbors[5] = (3,4,6,8)
     points=[[0],[0]]
     for x in xs:
@@ -43,7 +43,7 @@ def generate():
 
 def run(once=False):
     topic = 'test_slamgraph'
-    publisher = rospy.Publisher( topic, SLAMGraph )
+    publisher = rospy.Publisher( topic, SLAMGraph, latch=once )
 
     rospy.init_node( 'test_slamgraph' )
 
@@ -67,6 +67,7 @@ def run(once=False):
                          "map")
         rate.sleep()
         if once:
+            rospy.sleep(3)
             break;
 
-run()
+run(True)

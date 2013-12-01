@@ -22,10 +22,8 @@ namespace scavislam_rviz
 // BEGIN_TUTORIAL
 // Declare the visual class for this display.
 //
-// Each instance of ImuVisual represents the visualization of a single
-// sensor_msgs::Imu message.  Currently it just shows an arrow with
-// the direction and magnitude of the acceleration vector, but could
-// easily be expanded to include more of the message data.
+// Each instance of SLAMGraphVisual represents the visualization of a single
+// scavislam_messages::SLAMGraph message.
 class SLAMGraphVisual
 {
 public:
@@ -42,17 +40,22 @@ public:
   // Set the pose of the coordinate frame the message refers to.
   // These could be done inside setMessage(), but that would require
   // calls to FrameManager and error handling inside setMessage(),
-  // which doesn't seem as clean.  This way ImuVisual is only
+  // which doesn't seem as clean.  This way SLAMGraphVisual is only
   // responsible for visualization.
   void setFramePosition( const Ogre::Vector3& position );
   void setFrameOrientation( const Ogre::Quaternion& orientation );
 
   // Set the color and alpha of the visual, which are user-editable
-  // parameters and therefore don't come from the Imu message.
-  void setColor( Ogre::ColourValue &vertexcolor,
-                 Ogre::ColourValue &edgecolor,
-                 Ogre::ColourValue &pointcolor,
+  // parameters and therefore don't come from the SLAMGraph message.
+  void setEdgeColor( Ogre::ColourValue &edgecolor,
                  float a );
+  void setPointColor( Ogre::ColourValue &pointcolor,
+                 float a );
+
+  void setPointStyle( rviz::PointCloud::RenderMode m);
+  void setPointScale( float s );
+  void setVertexScale( float s );
+  void setEdgeWidth( float w );
 
 private:
   // The object implementing the actual arrow shape
@@ -60,9 +63,15 @@ private:
   boost::shared_ptr<rviz::PointCloud> points_;
   Ogre::ColourValue point_color_;
   std::vector<boost::shared_ptr<rviz::BillboardLine> > edges_;
+  Ogre::ColourValue edge_color_;
+
+  float alpha_;
+
+  float vertex_scale_;
+  float edge_width_;
 
   // A SceneNode whose pose is set to match the coordinate frame of
-  // the Imu message header.
+  // the SLAMGraph message header.
   Ogre::SceneNode* frame_node_;
 
   // The SceneManager, kept here only so the destructor can ask it to

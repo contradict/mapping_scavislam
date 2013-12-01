@@ -7,7 +7,9 @@
 #include <rviz/properties/color_property.h>
 #include <rviz/properties/float_property.h>
 #include <rviz/properties/int_property.h>
+#include <rviz/properties/enum_property.h>
 #include <rviz/frame_manager.h>
+#include <rviz/ogre_helpers/point_cloud.h>
 
 #include "slamgraph_visual.h"
 
@@ -21,17 +23,34 @@ namespace scavislam_rviz
 // constructor the parameters it needs to fully initialize.
 SLAMGraphDisplay::SLAMGraphDisplay()
 {
-  vertex_color_ = new rviz::ColorProperty( "Vertex Color", QColor( 204, 51, 204 ),
-                                           "Color to draw the graph vertices.",
-                                            this, SLOT( updateColorAndAlpha() ));
-
   point_color_ = new rviz::ColorProperty( "Point Color", QColor( 204, 51, 204 ),
                                           "Color to draw the points.",
                                            this, SLOT( updateColorAndAlpha() ));
 
+  point_style_property_ = new rviz::EnumProperty("Point Style", "Flat Squares",
+                                                 "Rendering mode for points,",
+                                                 this, SLOT( updatePointStyle() ));
+  point_style_property_->addOption( "Points", rviz::PointCloud::RM_POINTS);
+  point_style_property_->addOption( "Squares", rviz::PointCloud::RM_SQUARES);
+  point_style_property_->addOption( "Flat Squares", rviz::PointCloud::RM_FLAT_SQUARES);
+  point_style_property_->addOption( "Spheres", rviz::PointCloud::RM_SPHERES);
+  point_style_property_->addOption( "Boxes", rviz::PointCloud::RM_BOXES);
+
+  point_scale_property_ = new rviz::FloatProperty("Point Scale", 0.1,
+                                                  "Scale of point visual.",
+                                                  this, SLOT( updatePointScale() ));
+
+  vertex_scale_property_ = new rviz::FloatProperty("Vertex Scale", 1.0,
+                                                  "Scale of vertex visual.",
+                                                  this, SLOT( updateVertexScale() ));
+
   edge_color_ = new rviz::ColorProperty( "Edge Color", QColor( 204, 51, 204 ),
                                          "Color to draw the graph edges.",
                                           this, SLOT( updateColorAndAlpha() ));
+
+  edge_width_ = new rviz::FloatProperty( "Edge Width", 0.05,
+                                        "Width of edge lines.",
+                                        this, SLOT( updateEdgeWidth() ));
 
   alpha_property_ = new rviz::FloatProperty( "Alpha", 1.0,
                                              "0 is fully transparent, 1.0 is fully opaque.",
@@ -75,13 +94,53 @@ void SLAMGraphDisplay::reset()
 void SLAMGraphDisplay::updateColorAndAlpha()
 {
   float alpha = alpha_property_->getFloat();
-  Ogre::ColourValue vertexcolor = vertex_color_->getOgreColor();
   Ogre::ColourValue edgecolor = edge_color_->getOgreColor();
   Ogre::ColourValue pointcolor = point_color_->getOgreColor();
 
   for( size_t i = 0; i < visuals_.size(); i++ )
   {
-    visuals_[ i ]->setColor( vertexcolor, edgecolor, pointcolor, alpha );
+    visuals_[ i ]->setEdgeColor( edgecolor, alpha);
+    visuals_[ i ]->setPointColor( pointcolor, alpha );
+  }
+}
+
+void SLAMGraphDisplay::updatePointStyle()
+{
+  rviz::PointCloud::RenderMode mode =(rviz::PointCloud::RenderMode) point_style_property_->getOptionInt();
+
+  for( size_t i = 0; i < visuals_.size(); i++ )
+  {
+    visuals_[ i ]->setPointStyle( mode );
+  }
+}
+
+void SLAMGraphDisplay::updatePointScale()
+{
+  float scale = point_scale_property_->getFloat();
+
+  for( size_t i = 0; i < visuals_.size(); i++ )
+  {
+    visuals_[ i ]->setPointScale( scale );
+  }
+}
+
+void SLAMGraphDisplay::updateVertexScale()
+{
+  float scale = vertex_scale_property_->getFloat();
+
+  for( size_t i = 0; i < visuals_.size(); i++ )
+  {
+    visuals_[ i ]->setVertexScale( scale );
+  }
+}
+
+void SLAMGraphDisplay::updateEdgeWidth()
+{
+  float scale = edge_width_->getFloat();
+
+  for( size_t i = 0; i < visuals_.size(); i++ )
+  {
+    visuals_[ i ]->setEdgeWidth( scale );
   }
 }
 
@@ -95,7 +154,7 @@ void SLAMGraphDisplay::updateHistoryLength()
 void SLAMGraphDisplay::processMessage( const scavislam_messages::SLAMGraph::ConstPtr& msg )
 {
   // Here we call the rviz::FrameManager to get the transform from the
-  // fixed frame to the frame in the header of this Imu message.  If
+  // fixed frame to the frame in the header of this SLAMGraph message.  If
   // it fails, we can't do anything else so we return.
   Ogre::Quaternion orientation;
   Ogre::Vector3 position;
@@ -120,16 +179,28 @@ void SLAMGraphDisplay::processMessage( const scavislam_messages::SLAMGraph::Cons
     visual.reset(new SLAMGraphVisual( context_->getSceneManager(), scene_node_ ));
   }
 
+  float alpha = alpha_property_->getFloat();
+  Ogre::ColourValue pointcolor = point_color_->getOgreColor();
+  visual->setPointColor( pointcolor, alpha);
   // Now set or update the contents of the chosen visual.
   visual->setMessage( msg );
   visual->setFramePosition( position );
   visual->setFrameOrientation( orientation );
 
-  float alpha = alpha_property_->getFloat();
-  Ogre::ColourValue vertexcolor = vertex_color_->getOgreColor();
+  float pscale = point_scale_property_->getFloat();
+  visual->setPointScale(pscale);
+
+  rviz::PointCloud::RenderMode mode =(rviz::PointCloud::RenderMode) point_style_property_->getOptionInt();
+  visual->setPointStyle(mode);
+
+  float vscale = vertex_scale_property_->getFloat();
+  visual->setVertexScale(vscale);
+
   Ogre::ColourValue edgecolor = edge_color_->getOgreColor();
-  Ogre::ColourValue pointcolor = point_color_->getOgreColor();
-  visual->setColor( vertexcolor, edgecolor, pointcolor, alpha );
+  visual->setEdgeColor( edgecolor, alpha );
+
+  float width = edge_width_->getFloat();
+  visual->setEdgeWidth(width);
 
   // And send it to the end of the circular buffer
   visuals_.push_back(visual);
