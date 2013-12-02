@@ -2,6 +2,8 @@
 #include <cutil_inline.h>
 #endif
 
+#include <boost/unordered_map.hpp>
+
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
 #include <image_transport/subscriber_filter.h>
@@ -17,9 +19,11 @@
 #include <visiontools/accessor_macros.h>
 
 #include <sensor_msgs/image_encodings.h>
-#include <sensor_msgs/PointCloud2.h>
+#include <std_msgs/UInt32.h>
+#include <geometry_msgs/Point.h>
 #include <stereo_msgs/DisparityImage.h>
 #include <nav_msgs/Odometry.h>
+#include <scavislam_messages/SLAMGraph.h>
 
 #include <scavislam_ros/StereoVSLAMConfig.h>
 #include <dynamic_reconfigure/server.h>
@@ -76,7 +80,7 @@ class StereoVSLAMNode
 
         // Publications
         ros::Publisher pub_disparity_;
-        ros::Publisher pub_neighborhood_points_;
+        ros::Publisher pub_neighborhood_;
         ros::Publisher pub_odometry_;
 
         tf::TransformBroadcaster pose_;
@@ -185,7 +189,7 @@ void StereoVSLAMNode::InitROS()
     }
 
     pub_disparity_ = nh.advertise<DisparityImage>("gpu_disparity", 1 );
-    pub_neighborhood_points_ = nh.advertise<sensor_msgs::PointCloud2>("neighborhood_points", 1);
+    pub_neighborhood_ = nh.advertise<scavislam_messages::SLAMGraph>("neighborhood", 1);
     pub_odometry_ = nh.advertise<nav_msgs::Odometry>("odometry", 1);
 
     // Queue size 1 should be OK; the one that matters is the synchronizer queue size.
@@ -347,8 +351,10 @@ void StereoVSLAMNode::imageCb(
                 != neighborhood->vertex_map.end())
         {
             frontend->neighborhood() = neighborhood;
-            publishNeighborhood(neighborhood, l_info_msg);
+        } else {
+            ROS_ERROR("Current active keyfram not in backend neighborhood");
         }
+        publishNeighborhood(neighborhood, l_info_msg);
     }
     bool is_frame_droped = false;
     bool tracking_worked = frontend->processFrame(&is_frame_droped);
@@ -362,11 +368,14 @@ void StereoVSLAMNode::imageCb(
     {
         assert(frontend->to_optimizer_stack.size()==1);
         AddToOptimzerPtr to_opt = frontend->to_optimizer_stack.top();
+        ROS_INFO_STREAM("New keyframe added " << to_opt->newkey_id);
         backend->monitor.pushKeyframe(to_opt);
         frontend->to_optimizer_stack.pop();
     }
     DetectedLoop loop;
     bool is_loop_detected = backend->monitor.getClosedLoop(&loop);
+    if(is_loop_detected)
+        ROS_INFO("Loop detected");
 }
 
 
@@ -429,7 +438,7 @@ void StereoVSLAMNode::publishNeighborhood(
         const CameraInfoConstPtr& l_info_msg
         )
 {
-    pcl::PointCloud<pcl::PointXYZ> neighborhood_cloud;
+    scavislam_messages::SLAMGraph msg;
 
     for (list<CandidatePoint3Ptr>::const_iterator
          it=neighborhood->point_list.begin();
@@ -438,34 +447,50 @@ void StereoVSLAMNode::publishNeighborhood(
       const CandidatePoint3Ptr & ap = *it;
       Eigen::Vector3d pt(GET_MAP_ELEM(ap->anchor_id, neighborhood->vertex_map).T_me_from_w.inverse()
                       *ap->xyz_anchor);
-      neighborhood_cloud.push_back(pcl::PointXYZ(pt(0), pt(1), pt(2)));
+      geometry_msgs::Point mpt;
+      mpt.x=pt(0);
+      mpt.y=pt(1);
+      mpt.z=pt(2);
+      msg.points.push_back(mpt);
     }
-    /*
-    Draw3d::points(points,2);
+
+    boost::unordered_map<int, int> id2index;
+    int index = 0;
     for (ALIGNED<FrontendVertex>::int_hash_map::const_iterator
          it=neighborhood->vertex_map.begin();
          it!=neighborhood->vertex_map.end(); ++it)
     {
+      scavislam_messages::Vertex vert;
       SE3d T1 = it->second.T_me_from_w.inverse();
-      Draw3d::pose(T1);
+      tf::quaternionEigenToMsg(T1.so3().unit_quaternion(), vert.pose.orientation);
+      vert.pose.position.x = T1.translation()(0);
+      vert.pose.position.y = T1.translation()(1);
+      vert.pose.position.z = T1.translation()(2);
+      msg.vertices.push_back(vert);
+      id2index.insert(std::pair<int,int>(it->first, index++));
+    }
 
+    for (ALIGNED<FrontendVertex>::int_hash_map::const_iterator
+         it=neighborhood->vertex_map.begin();
+         it!=neighborhood->vertex_map.end(); ++it)
+    {
+      scavislam_messages::Vertex& v0=msg.vertices.at(id2index.at(it->first));
       for (multimap<int,int>::const_iterator it2 =
            it->second.strength_to_neighbors.begin();
            it2 != it->second.strength_to_neighbors.end(); ++it2)
       {
-        SE3d T2 = GET_MAP_ELEM(it2->second,
-                              neighborhood->vertex_map)
-            .T_me_from_w.inverse();
-        Draw3d::line(T1.translation(), T2.translation());
+        boost::unordered_map<int, int>::const_iterator nb = id2index.find(it2->second);
+        if(nb != id2index.end()) {
+            std_msgs::UInt32 mnb;
+            mnb.data = nb->second;
+            v0.neighbors.push_back(mnb);
+        }
       }
     }
-    */
-    pcl::PCLPointCloud2 pub_cloud;
-    pcl::toPCLPointCloud2(neighborhood_cloud, pub_cloud);
-    pub_cloud.header.seq = l_info_msg->header.seq;
-    pub_cloud.header.stamp = l_info_msg->header.stamp.toNSec();
-    pub_cloud.header.frame_id = l_info_msg->header.frame_id;
-    pub_neighborhood_points_.publish(pub_cloud);
+    msg.header.seq = l_info_msg->header.seq;
+    msg.header.stamp = l_info_msg->header.stamp;
+    msg.header.frame_id = l_info_msg->header.frame_id;
+    pub_neighborhood_.publish(msg);
 }
 
 void StereoVSLAMNode::publishPose(const CameraInfoConstPtr& l_info_msg)
