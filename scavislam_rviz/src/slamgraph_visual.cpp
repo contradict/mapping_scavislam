@@ -49,8 +49,13 @@ void SLAMGraphVisual::setMessage( const scavislam_messages::SLAMGraph::ConstPtr&
     points_->clear();
     points_->addPoints(newpoints, i);
 
+    vertices_.resize(msg->vertices.size());
+    i=0;
     for(const auto vertex : msg->vertices){
-        boost::shared_ptr<rviz::Axes> vert(new rviz::Axes( scene_manager_, frame_node_ ));
+        boost::shared_ptr<rviz::Axes> &vert = vertices_.at(i++);
+        if(vert.get() == 0){
+            vert.reset(new rviz::Axes(scene_manager_, frame_node_));
+        }
         Ogre::Vector3 pos(vertex.pose.position.x,
                 vertex.pose.position.y,
                 vertex.pose.position.z);
@@ -60,10 +65,9 @@ void SLAMGraphVisual::setMessage( const scavislam_messages::SLAMGraph::ConstPtr&
                 vertex.pose.orientation.y,
                 vertex.pose.orientation.z);
         vert->setOrientation(orient);
-        vert->setScale(Ogre::Vector3(vertex_scale_, vertex_scale_, vertex_scale_));
-        vertices_.push_back(vert);
     }
 
+    std::vector<boost::shared_ptr<rviz::BillboardLine> > newedges;
     for(const auto vertex : msg->vertices){
         Ogre::Vector3 p0(vertex.pose.position.x,
                 vertex.pose.position.y,
@@ -87,9 +91,11 @@ void SLAMGraphVisual::setMessage( const scavislam_messages::SLAMGraph::ConstPtr&
             eln->addPoint(p1);
             eln->setColor(edge_color_.r, edge_color_.g, edge_color_.b, alpha_);
             eln->setLineWidth( edge_width_ );
-            edges_.push_back(eln);
+            newedges.push_back(eln);
         }
     }
+    edges_.swap(newedges);
+    newedges.clear();
 
     delete[] newpoints;
 }
