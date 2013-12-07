@@ -206,9 +206,9 @@ void StereoVSLAMNode::InitVSLAM()
     cv::Size res=model_.right().reducedResolution();
     int cam_width=res.width;
     int cam_height=res.height;
-    double cam_f=model_.right().fx();
-    double cam_px=model_.right().cx();
-    double cam_py=model_.right().cy();
+    double cam_f=model_.left().fx();
+    double cam_px=model_.left().cx();
+    double cam_py=model_.left().cy();
     double cam_baseline=model_.baseline();
 
     StereoCamera stereo_camera((double)cam_f,
