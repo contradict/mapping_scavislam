@@ -8,6 +8,7 @@
 #include <rviz/properties/float_property.h>
 #include <rviz/properties/int_property.h>
 #include <rviz/properties/enum_property.h>
+#include <rviz/properties/bool_property.h>
 #include <rviz/frame_manager.h>
 #include <rviz/ogre_helpers/point_cloud.h>
 
@@ -26,6 +27,10 @@ SLAMGraphDisplay::SLAMGraphDisplay()
   point_color_ = new rviz::ColorProperty( "Point Color", QColor( 204, 51, 204 ),
                                           "Color to draw the points.",
                                            this, SLOT( updateColorAndAlpha() ));
+
+  show_point_connections_ = new rviz::BoolProperty( "Show point connections", false,
+                                          "Show connections from anchor vertices to points.",
+                                           this, SLOT( updatePointLines() ));
 
   point_style_property_ = new rviz::EnumProperty("Point Style", "Flat Squares",
                                                  "Rendering mode for points,",
@@ -144,6 +149,16 @@ void SLAMGraphDisplay::updateEdgeWidth()
   }
 }
 
+void SLAMGraphDisplay::updatePointLines()
+{
+  bool lines = show_point_connections_->getBool();
+
+  for( size_t i = 0; i < visuals_.size(); i++ )
+  {
+    visuals_[ i ]->setShowPointConnections( lines );
+  }
+}
+
 // Set the number of past visuals to show.
 void SLAMGraphDisplay::updateHistoryLength()
 {
@@ -201,6 +216,9 @@ void SLAMGraphDisplay::processMessage( const scavislam_messages::SLAMGraph::Cons
 
   float width = edge_width_->getFloat();
   visual->setEdgeWidth(width);
+
+  bool lines = show_point_connections_->getBool();
+  visual->setShowPointConnections(lines);
 
   // And send it to the end of the circular buffer
   visuals_.push_back(visual);

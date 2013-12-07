@@ -17,6 +17,7 @@ class ColorProperty;
 class FloatProperty;
 class IntProperty;
 class EnumProperty;
+class BoolProperty;
 }
 
 // All the source in this plugin is in its own namespace.  This is not
@@ -71,6 +72,7 @@ private Q_SLOTS:
   void updatePointScale();
   void updateVertexScale();
   void updateEdgeWidth();
+  void updatePointLines();
 
   // Function to handle an incoming ROS message.
 private:
@@ -82,6 +84,7 @@ private:
 
   // User-editable property variables.
   rviz::ColorProperty* point_color_;
+  rviz::BoolProperty* show_point_connections_;
   rviz::ColorProperty* edge_color_;
   rviz::FloatProperty* edge_width_;
   rviz::FloatProperty* alpha_property_;

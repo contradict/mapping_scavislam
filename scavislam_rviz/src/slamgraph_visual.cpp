@@ -67,21 +67,23 @@ void SLAMGraphVisual::setMessage( const scavislam_messages::SLAMGraph::ConstPtr&
         vert->setOrientation(orient);
     }
 
-    std::vector<boost::shared_ptr<rviz::BillboardLine> > newedges;
+    std::vector<boost::shared_ptr<rviz::BillboardLine> > newgraphedges;
+    std::vector<boost::shared_ptr<rviz::BillboardLine> > newpointedges;
     for(const auto vertex : msg->vertices){
         Ogre::Vector3 p0(vertex.pose.position.x,
                 vertex.pose.position.y,
                 vertex.pose.position.z);
-        /*
-        for(const auto point : vertex.points){
-            boost::shared_ptr<rviz::BillboardLine> eln(new rviz::BillboardLine( scene_manager_, frame_node_ ));
-            Ogre::Vector3 p1(newpoints[point.data].position);
-            eln->addPoint(p0);
-            eln->addPoint(p1);
-            eln->setColor(point_color_);
-            edges_.push_back(eln);
+        if(show_point_connections_){
+            for(const auto point : vertex.points){
+                boost::shared_ptr<rviz::BillboardLine> eln(new rviz::BillboardLine( scene_manager_, frame_node_ ));
+                Ogre::Vector3 p1(newpoints[point.data].position);
+                eln->addPoint(p0);
+                eln->addPoint(p1);
+                eln->setColor(point_color_.r, point_color_.g, point_color_.b, alpha_);
+                eln->setLineWidth( edge_width_/2.0 );
+                newpointedges.push_back(eln);
+            }
         }
-        */
         for(const auto nb : vertex.neighbors){
             boost::shared_ptr<rviz::BillboardLine> eln(new rviz::BillboardLine( scene_manager_, frame_node_ ));
             Ogre::Vector3 p1(msg->vertices.at(nb.data).pose.position.x,
@@ -91,11 +93,11 @@ void SLAMGraphVisual::setMessage( const scavislam_messages::SLAMGraph::ConstPtr&
             eln->addPoint(p1);
             eln->setColor(edge_color_.r, edge_color_.g, edge_color_.b, alpha_);
             eln->setLineWidth( edge_width_ );
-            newedges.push_back(eln);
+            newgraphedges.push_back(eln);
         }
     }
-    edges_.swap(newedges);
-    newedges.clear();
+    graph_edges_.swap(newgraphedges);
+    point_edges_.swap(newpointedges);
 
     delete[] newpoints;
 }
@@ -116,7 +118,7 @@ void SLAMGraphVisual::setEdgeColor(Ogre::ColourValue &edgecolor,
                                float a )
 {
   edge_color_ = edgecolor;
-  for(auto edge : edges_)
+  for(auto edge : graph_edges_)
       edge->setColor(edgecolor.r, edgecolor.g, edgecolor.b, a);
   alpha_ = a;
 }
@@ -125,6 +127,8 @@ void SLAMGraphVisual::setPointColor( Ogre::ColourValue &pointcolor,
                                      float a )
 {
   point_color_ = pointcolor;
+  for(auto edge : point_edges_)
+      edge->setColor(pointcolor.r, pointcolor.g, pointcolor.b, a);
   points_->setAlpha(a);
 }
 
@@ -149,9 +153,14 @@ void SLAMGraphVisual::setVertexScale( float s )
 void SLAMGraphVisual::setEdgeWidth(float w)
 {
     edge_width_ = w;
-    for(auto edge : edges_){
+    for(auto edge : graph_edges_){
         edge->setLineWidth(w);
     }
+}
+
+void SLAMGraphVisual::setShowPointConnections(bool c)
+{
+    show_point_connections_ = c;
 }
 
 } // end namespace rviz_plugin_tutorials

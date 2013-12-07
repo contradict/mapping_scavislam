@@ -56,19 +56,23 @@ public:
   void setPointScale( float s );
   void setVertexScale( float s );
   void setEdgeWidth( float w );
+  void setShowPointConnections(bool c);
 
 private:
   // The object implementing the actual arrow shape
   std::vector<boost::shared_ptr<rviz::Axes> > vertices_;
   boost::shared_ptr<rviz::PointCloud> points_;
   Ogre::ColourValue point_color_;
-  std::vector<boost::shared_ptr<rviz::BillboardLine> > edges_;
+  std::vector<boost::shared_ptr<rviz::BillboardLine> > graph_edges_;
+  std::vector<boost::shared_ptr<rviz::BillboardLine> > point_edges_;
   Ogre::ColourValue edge_color_;
 
   float alpha_;
 
   float vertex_scale_;
   float edge_width_;
+
+  bool show_point_connections_;
 
   // A SceneNode whose pose is set to match the coordinate frame of
   // the SLAMGraph message header.
