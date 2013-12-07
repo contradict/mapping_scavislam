@@ -4,6 +4,8 @@
 
 #include <boost/unordered_map.hpp>
 
+#include <Eigen/Geometry>
+
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
 #include <image_transport/subscriber_filter.h>
@@ -29,6 +31,8 @@
 #include <dynamic_reconfigure/server.h>
 
 #include <tf/transform_broadcaster.h>
+#include <tf/transform_listener.h>
+#include <tf_conversions/tf_eigen.h>
 
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
@@ -84,6 +88,7 @@ class StereoVSLAMNode
         ros::Publisher pub_odometry_;
 
         tf::TransformBroadcaster pose_;
+        tf::TransformListener listener_;
 
         // Dynamic reconfigure
         boost::recursive_mutex config_mutex_;
@@ -115,6 +120,7 @@ class StereoVSLAMNode
                 const ImageConstPtr& l_image_msg,
                 const CameraInfoConstPtr& l_info_msg
                 );
+        bool lookupCameraTransform(const std::string& image_frame, SE3d *T_base_from_camera);
         void publishNeighborhood(
                 const NeighborhoodPtr neighborhood,
                 const CameraInfoConstPtr& l_info_msg
@@ -433,12 +439,33 @@ void StereoVSLAMNode::publishDisparity(
     pub_disparity_.publish(disp_msg);
 }
 
+bool StereoVSLAMNode::lookupCameraTransform(const std::string& image_frame, SE3d *T_base_from_camera)
+{
+    tf::StampedTransform tfT_base_from_camera;
+    try {
+        listener_.lookupTransform("/base_link", image_frame, ros::Time(0), tfT_base_from_camera);
+    } catch (tf::TransformException ex) {
+        ROS_ERROR("Could not look up transform to cameras: %s", ex.what());
+        return false;
+    }
+
+    Eigen::Quaterniond q;
+    tf::quaternionTFToEigen(tfT_base_from_camera.getRotation(),q);
+    T_base_from_camera->so3() = SO3(q);
+    tf::vectorTFToEigen(tfT_base_from_camera.getOrigin(),
+                        T_base_from_camera->translation());
+    return true;
+}
+
 void StereoVSLAMNode::publishNeighborhood(
         const NeighborhoodPtr neighborhood,
         const CameraInfoConstPtr& l_info_msg
         )
 {
     scavislam_messages::SLAMGraph msg;
+    SE3d T_base_from_camera;
+    if(!lookupCameraTransform(l_info_msg->header.frame_id, &T_base_from_camera))
+        return;
 
     boost::unordered_map<int, int> vid2index;
     int index = 0;
@@ -447,7 +474,7 @@ void StereoVSLAMNode::publishNeighborhood(
          it!=neighborhood->vertex_map.end(); ++it)
     {
       scavislam_messages::Vertex vert;
-      SE3d T1 = it->second.T_me_from_w.inverse();
+      SE3d T1 = T_base_from_camera*(it->second.T_me_from_w.inverse());
       tf::quaternionEigenToMsg(T1.so3().unit_quaternion(), vert.pose.orientation);
       vert.pose.position.x = T1.translation()(0);
       vert.pose.position.y = T1.translation()(1);
@@ -462,7 +489,7 @@ void StereoVSLAMNode::publishNeighborhood(
          it!=neighborhood->point_list.end(); ++it)
     {
       const CandidatePoint3Ptr & ap = *it;
-      Eigen::Vector3d pt(GET_MAP_ELEM(ap->anchor_id, neighborhood->vertex_map).T_me_from_w.inverse()
+      Eigen::Vector3d pt(T_base_from_camera*(GET_MAP_ELEM(ap->anchor_id, neighborhood->vertex_map).T_me_from_w.inverse())
                       *ap->xyz_anchor);
       geometry_msgs::Point mpt;
       mpt.x=pt(0);
@@ -499,7 +526,7 @@ void StereoVSLAMNode::publishNeighborhood(
     }
     msg.header.seq = l_info_msg->header.seq;
     msg.header.stamp = l_info_msg->header.stamp;
-    msg.header.frame_id = l_info_msg->header.frame_id;
+    msg.header.frame_id = "map";
     pub_neighborhood_.publish(msg);
 }
 
@@ -507,10 +534,14 @@ void StereoVSLAMNode::publishPose(const CameraInfoConstPtr& l_info_msg)
 {
     SE3d T_cur;
     frontend->currentPose(T_cur);
+    SE3d T_base_from_camera;
+    if(!lookupCameraTransform(l_info_msg->header.frame_id, &T_base_from_camera))
+        return;
+    T_cur = T_base_from_camera*T_cur;
 
     nav_msgs::Odometry odo;
-    odo.header.frame_id = l_info_msg->header.frame_id;
-    odo.child_frame_id = "odom";
+    odo.header.frame_id = "map";
+    odo.child_frame_id = l_info_msg->header.frame_id;
     odo.header.stamp = l_info_msg->header.stamp;
 
     odo.twist.twist.linear.x = 0;

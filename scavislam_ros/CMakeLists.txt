@@ -14,6 +14,7 @@ find_package(catkin REQUIRED
         cv_bridge
         pcl_ros
         eigen_conversions
+        tf_conversions
     )
 
 find_package(CUDA REQUIRED)
