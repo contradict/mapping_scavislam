@@ -352,7 +352,7 @@ void StereoVSLAMNode::imageCb(
         {
             frontend->neighborhood() = neighborhood;
         } else {
-            ROS_ERROR("Current active keyfram not in backend neighborhood");
+            ROS_INFO("Current active keyframe not in backend neighborhood");
         }
         publishNeighborhood(neighborhood, l_info_msg);
     }
