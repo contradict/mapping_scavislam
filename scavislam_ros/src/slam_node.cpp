@@ -440,21 +440,7 @@ void StereoVSLAMNode::publishNeighborhood(
 {
     scavislam_messages::SLAMGraph msg;
 
-    for (list<CandidatePoint3Ptr>::const_iterator
-         it=neighborhood->point_list.begin();
-         it!=neighborhood->point_list.end(); ++it)
-    {
-      const CandidatePoint3Ptr & ap = *it;
-      Eigen::Vector3d pt(GET_MAP_ELEM(ap->anchor_id, neighborhood->vertex_map).T_me_from_w.inverse()
-                      *ap->xyz_anchor);
-      geometry_msgs::Point mpt;
-      mpt.x=pt(0);
-      mpt.y=pt(1);
-      mpt.z=pt(2);
-      msg.points.push_back(mpt);
-    }
-
-    boost::unordered_map<int, int> id2index;
+    boost::unordered_map<int, int> vid2index;
     int index = 0;
     for (ALIGNED<FrontendVertex>::int_hash_map::const_iterator
          it=neighborhood->vertex_map.begin();
@@ -467,20 +453,44 @@ void StereoVSLAMNode::publishNeighborhood(
       vert.pose.position.y = T1.translation()(1);
       vert.pose.position.z = T1.translation()(2);
       msg.vertices.push_back(vert);
-      id2index.insert(std::pair<int,int>(it->first, index++));
+      vid2index.insert(std::pair<int,int>(it->first, index++));
     }
+
+    index = 0;
+    for (list<CandidatePoint3Ptr>::const_iterator
+         it=neighborhood->point_list.begin();
+         it!=neighborhood->point_list.end(); ++it)
+    {
+      const CandidatePoint3Ptr & ap = *it;
+      Eigen::Vector3d pt(GET_MAP_ELEM(ap->anchor_id, neighborhood->vertex_map).T_me_from_w.inverse()
+                      *ap->xyz_anchor);
+      geometry_msgs::Point mpt;
+      mpt.x=pt(0);
+      mpt.y=pt(1);
+      mpt.z=pt(2);
+      msg.points.push_back(mpt);
+      boost::unordered_map<int, int>::const_iterator afidx = vid2index.find(ap->anchor_id);
+      if(afidx != vid2index.end()){
+        scavislam_messages::Vertex& vert=msg.vertices.at(afidx->second);
+        std_msgs::UInt32 pid;
+        pid.data=index;
+        vert.points.push_back(pid);
+      }
+      index++;
+    }
+
 
     for (ALIGNED<FrontendVertex>::int_hash_map::const_iterator
          it=neighborhood->vertex_map.begin();
          it!=neighborhood->vertex_map.end(); ++it)
     {
-      scavislam_messages::Vertex& v0=msg.vertices.at(id2index.at(it->first));
+      scavislam_messages::Vertex& v0=msg.vertices.at(vid2index.at(it->first));
       for (multimap<int,int>::const_iterator it2 =
            it->second.strength_to_neighbors.begin();
            it2 != it->second.strength_to_neighbors.end(); ++it2)
       {
-        boost::unordered_map<int, int>::const_iterator nb = id2index.find(it2->second);
-        if(nb != id2index.end()) {
+        boost::unordered_map<int, int>::const_iterator nb = vid2index.find(it2->second);
+        if(nb != vid2index.end()) {
             std_msgs::UInt32 mnb;
             mnb.data = nb->second;
             v0.neighbors.push_back(mnb);
