@@ -374,6 +374,7 @@ void StereoVSLAMNode::imageCb(
     publishDisparity(l_image_msg, l_info_msg);
     if(tracking_worked==false)
     {
+        ROS_ERROR("Tracking Failed.");
         return;
     }
     publishPose(l_info_msg);
