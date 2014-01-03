@@ -3,7 +3,14 @@ project(scavislam_rviz)
 
 set(CMAKE_BUILD_TYPE Debug)
 
-find_package(catkin REQUIRED COMPONENTS rviz scavislam_messages)
+find_package(catkin REQUIRED COMPONENTS
+    rviz
+    scavislam_messages
+    scavislam_ros
+    pcl_ros
+    ScaViSLAM
+    eigen_conversions
+    )
 catkin_package()
 include_directories(include ${catkin_INCLUDE_DIRS})
 link_directories(${catkin_LIBRARY_DIRS})

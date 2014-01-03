@@ -5,6 +5,8 @@ set(CMAKE_BUILD_TYPE RelWithDebInfo)
 
 SET(CMAKE_VERBOSE_MAKEFILE ON)
 
+add_definitions("-std=c++11")
+
 find_package(catkin REQUIRED
     COMPONENTS
         dynamic_reconfigure
@@ -29,13 +31,23 @@ generate_dynamic_reconfigure_options(
 catkin_package(
     CATKIN_DEPENDS
         dynamic_reconfigure
+    INCLUDE_DIRS
+        include
     )
 
 include_directories(
+    include
     ${catkin_INCLUDE_DIRS}
+    )
+
+add_library(scavislammessagehelper
+    src/stereograph.cpp
     )
 
 CUDA_ADD_EXECUTABLE(stereo_vslam_node
     src/slam_node.cpp
     )
-target_link_libraries(stereo_vslam_node ${catkin_LIBRARIES})
+target_link_libraries(stereo_vslam_node
+    scavislammessagehelper
+    ${catkin_LIBRARIES}
+    )

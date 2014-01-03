@@ -1,3 +1,8 @@
-std_msgs/Header       header
-Vertex[]              vertices
-geometry_msgs/Point[] points
+std_msgs/Header header
+sensor_msgs/PointCloud2 doublewindow
+int32[]         active_points
+int32[]         outer_points
+Point[]         points
+Vertex[]        vertices
+Edge[]          edges
+geometry_msgs/Pose T_base_from_camera

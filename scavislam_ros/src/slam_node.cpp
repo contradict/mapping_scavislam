@@ -51,6 +51,8 @@
 #include "placerecognizer.h"
 #include "stereo_frontend.h"
 
+#include <scavislam_ros/stereograph.h>
+
 namespace stereo_vslam_node {
 
 using namespace sensor_msgs;
@@ -85,6 +87,7 @@ class StereoVSLAMNode
         // Publications
         ros::Publisher pub_disparity_;
         ros::Publisher pub_neighborhood_;
+        ros::Publisher pub_full_graph_;
         ros::Publisher pub_odometry_;
 
         tf::TransformBroadcaster pose_;
@@ -125,7 +128,11 @@ class StereoVSLAMNode
                 const NeighborhoodPtr neighborhood,
                 const CameraInfoConstPtr& l_info_msg
                 );
-        void publishPose(const CameraInfoConstPtr& l_info_msg);
+        void publishFullGraph(
+                const BackendDrawDataPtr graph_draw_data,
+                const CameraInfoConstPtr& l_info_msg
+                );
+         void publishPose(const CameraInfoConstPtr& l_info_msg);
 
         void configCb(Config &config, uint32_t level);
 };
@@ -196,6 +203,7 @@ void StereoVSLAMNode::InitROS()
 
     pub_disparity_ = nh.advertise<DisparityImage>("gpu_disparity", 1 );
     pub_neighborhood_ = nh.advertise<scavislam_messages::SLAMGraph>("neighborhood", 1);
+    pub_full_graph_ = nh.advertise<scavislam_messages::SLAMGraph>("slam_graph", 1);
     pub_odometry_ = nh.advertise<nav_msgs::Odometry>("odometry", 1);
 
     // Queue size 1 should be OK; the one that matters is the synchronizer queue size.
@@ -382,6 +390,11 @@ void StereoVSLAMNode::imageCb(
     bool is_loop_detected = backend->monitor.getClosedLoop(&loop);
     if(is_loop_detected)
         ROS_INFO("Loop detected");
+
+    BackendDrawDataPtr graph_draw_data(new BackendDrawData);
+    if(backend->monitor.getDrawData(&graph_draw_data))
+        publishFullGraph(graph_draw_data,
+                         l_info_msg);
 }
 
 
@@ -467,67 +480,31 @@ void StereoVSLAMNode::publishNeighborhood(
     if(!lookupCameraTransform(l_info_msg->header.frame_id, &T_base_from_camera))
         return;
 
-    boost::unordered_map<int, int> vid2index;
-    int index = 0;
-    for (ALIGNED<FrontendVertex>::int_hash_map::const_iterator
-         it=neighborhood->vertex_map.begin();
-         it!=neighborhood->vertex_map.end(); ++it)
-    {
-      scavislam_messages::Vertex vert;
-      SE3d T1 = T_base_from_camera*(it->second.T_me_from_w.inverse());
-      tf::quaternionEigenToMsg(T1.so3().unit_quaternion(), vert.pose.orientation);
-      vert.pose.position.x = T1.translation()(0);
-      vert.pose.position.y = T1.translation()(1);
-      vert.pose.position.z = T1.translation()(2);
-      msg.vertices.push_back(vert);
-      vid2index.insert(std::pair<int,int>(it->first, index++));
-    }
-
-    index = 0;
-    for (list<CandidatePoint3Ptr>::const_iterator
-         it=neighborhood->point_list.begin();
-         it!=neighborhood->point_list.end(); ++it)
-    {
-      const CandidatePoint3Ptr & ap = *it;
-      Eigen::Vector3d pt(T_base_from_camera*(GET_MAP_ELEM(ap->anchor_id, neighborhood->vertex_map).T_me_from_w.inverse())
-                      *ap->xyz_anchor);
-      geometry_msgs::Point mpt;
-      mpt.x=pt(0);
-      mpt.y=pt(1);
-      mpt.z=pt(2);
-      msg.points.push_back(mpt);
-      boost::unordered_map<int, int>::const_iterator afidx = vid2index.find(ap->anchor_id);
-      if(afidx != vid2index.end()){
-        scavislam_messages::Vertex& vert=msg.vertices.at(afidx->second);
-        std_msgs::UInt32 pid;
-        pid.data=index;
-        vert.points.push_back(pid);
-      }
-      index++;
-    }
-
-
-    for (ALIGNED<FrontendVertex>::int_hash_map::const_iterator
-         it=neighborhood->vertex_map.begin();
-         it!=neighborhood->vertex_map.end(); ++it)
-    {
-      scavislam_messages::Vertex& v0=msg.vertices.at(vid2index.at(it->first));
-      for (multimap<int,int>::const_iterator it2 =
-           it->second.strength_to_neighbors.begin();
-           it2 != it->second.strength_to_neighbors.end(); ++it2)
-      {
-        boost::unordered_map<int, int>::const_iterator nb = vid2index.find(it2->second);
-        if(nb != vid2index.end()) {
-            std_msgs::UInt32 mnb;
-            mnb.data = nb->second;
-            v0.neighbors.push_back(mnb);
-        }
-      }
-    }
+    scavislam_ros::NeighborhoodToMessage( neighborhood, T_base_from_camera, &msg);
     msg.header.seq = l_info_msg->header.seq;
     msg.header.stamp = l_info_msg->header.stamp;
     msg.header.frame_id = "map";
     pub_neighborhood_.publish(msg);
+}
+
+void StereoVSLAMNode::publishFullGraph(
+        const BackendDrawDataPtr graph_draw_data,
+        const CameraInfoConstPtr& l_info_msg
+        )
+{
+    scavislam_messages::SLAMGraph msg;
+
+    SE3d T_base_from_camera;
+    if(!lookupCameraTransform(l_info_msg->header.frame_id, &T_base_from_camera))
+        return;
+
+    scavislam_ros::DrawDataToMessage( graph_draw_data,
+                                      T_base_from_camera,
+                                      &msg);
+    msg.header.seq = l_info_msg->header.seq;
+    msg.header.stamp = l_info_msg->header.stamp;
+    msg.header.frame_id = "map";
+    pub_full_graph_.publish(msg);
 }
 
 void StereoVSLAMNode::publishPose(const CameraInfoConstPtr& l_info_msg)

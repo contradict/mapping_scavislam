@@ -1,4 +1,6 @@
 
+#include <unordered_map>
+
 #include <OGRE/OgreVector3.h>
 #include <OGRE/OgreSceneNode.h>
 #include <OGRE/OgreSceneManager.h>
@@ -7,7 +9,15 @@
 #include <rviz/ogre_helpers/point_cloud.h>
 #include <rviz/ogre_helpers/billboard_line.h>
 
-#include "slamgraph_visual.h"
+#include <scavislam_rviz/slamgraph_visual.h>
+
+#include <pcl/point_cloud.h>
+#include <pcl_conversions/pcl_conversions.h>
+#undef HAVE_OPENNI
+
+#include <scavislam_ros/stereograph.h>
+
+#include <eigen_conversions/eigen_msg.h>
 
 namespace scavislam_rviz
 {
@@ -38,68 +48,128 @@ SLAMGraphVisual::~SLAMGraphVisual()
 
 void SLAMGraphVisual::setMessage( const scavislam_messages::SLAMGraph::ConstPtr& msg )
 {
-    rviz::PointCloud::Point *newpoints = new rviz::PointCloud::Point[msg->points.size()];
+    /*
+    SE3d T_c1_from_w
+          = GET_MAP_ELEM(id1,graph_draw_data->vertex_table).T_me_from_world;
+      SE3d T_c2_from_w
+          = GET_MAP_ELEM(id2,graph_draw_data->vertex_table).T_me_from_world;
+      Draw3d::line(T_c1_from_w.inverse().translation(),
+                   T_c2_from_w.inverse().translation());
+
+                   //How do I color a vertex here?
+        int pose_id_1 = it_win1->first;
+        StereoGraph::WindowType wtype_1 = it_win1->second;
+        if (wtype_1==StereoGraph::INNER)
+            glColor3f(1,0,0);
+        else
+            glColor3f(0.5,0.5,0.5);
+        const StereoGraph::Vertex & v
+            = GET_MAP_ELEM(pose_id_1, graph_draw_data->vertex_table);
+        Draw3d::pose(v.T_me_from_world.inverse());
+
+
+    */
+   /* build window table */
+    std::unordered_map<int, int> doublewindow;
+    pcl::PointCloud<WindowTablePoint> wtps;
+    fromROSMsg( msg->doublewindow, wtps );
+    for( const auto& pt : wtps ){
+        doublewindow.insert(std::pair<int,int>(pt.vertex_id, pt.window));
+    }
+
+    /* extract camera extrinsics */
+    Eigen::Affine3d T_base_from_camera;
+    tf::poseMsgToEigen(msg->T_base_from_camera, T_base_from_camera);
+
+    /* build vertex table while drawing vertices */
+    std::unordered_map<int, Eigen::Affine3d> vertex_table;
+    if( vertices_.size() < msg->vertices.size() )
+        vertices_.resize(msg->vertices.size());
     int i=0;
+    for(const auto vertex : msg->vertices){
+        boost::shared_ptr<rviz::Axes> &vert = vertices_.at(i++);
+        if( vert.get() == 0 )
+            vert.reset(new rviz::Axes(scene_manager_, frame_node_));
+        Eigen::Affine3d vpose;
+        tf::poseMsgToEigen( vertex.pose, vpose );
+        vpose = T_base_from_camera*vpose.inverse();
+        Eigen::Vector3d t=vpose.translation();
+        Ogre::Vector3 pos(t(0),
+                          t(1),
+                          t(2));
+        vert->setPosition(pos);
+        Eigen::Quaterniond q(vpose.rotation());
+        Ogre::Quaternion orient(q.w(),
+                                q.x(),
+                                q.y(),
+                                q.z());
+        vert->setOrientation(orient);
+        vert->setToDefaultColors();
+        vertex_table.insert(std::pair<int, Eigen::Affine3d>(vertex.own_id, vpose));
+    }
+    for( int j=i; j<vertices_.size(); j++ ) {
+        Ogre::ColourValue off( 0.0f, 0.0f, 0.0f, 0.0f );
+        vertices_[j]->setXColor( off );
+        vertices_[j]->setYColor( off );
+        vertices_[j]->setZColor( off );
+    }
+
+    /* Use transforms from vertex table to draw points */
+    rviz::PointCloud::Point *newpoints = new rviz::PointCloud::Point[msg->points.size()];
+    std::vector<boost::shared_ptr<rviz::BillboardLine> > newpointedges;
+    i=0;
     for(const auto point :msg->points) {
         newpoints[i].color = point_color_;
-        newpoints[i].position[0]=point.x;
-        newpoints[i].position[1]=point.y;
-        newpoints[i++].position[2]=point.z;
+        Eigen::Vector3d ap;
+        tf::vectorMsgToEigen(point.xyz_anchor, ap);
+        Eigen::Affine3d T_world_from_anchorframe=vertex_table[ point.anchorframe_id ];
+        Eigen::Vector3d wp=T_world_from_anchorframe*ap;
+        newpoints[i].position[0]=wp(0);
+        newpoints[i].position[1]=wp(1);
+        newpoints[i].position[2]=wp(2);
+        if( show_point_connections_ ) {
+            newpointedges.push_back(
+                    boost::shared_ptr<rviz::BillboardLine>(
+                        new rviz::BillboardLine( scene_manager_, frame_node_ )
+                        )
+                    );
+            Ogre::Vector3 p0( T_world_from_anchorframe.translation()(0),
+                    T_world_from_anchorframe.translation()(1),
+                    T_world_from_anchorframe.translation()(2));
+            newpointedges.back()->addPoint(p0);
+            newpointedges.back()->addPoint(newpoints[i].position);
+        }
+        i++;
     }
     points_->clear();
     points_->addPoints(newpoints, i);
-
-    vertices_.resize(msg->vertices.size());
-    i=0;
-    for(const auto vertex : msg->vertices){
-        boost::shared_ptr<rviz::Axes> &vert = vertices_.at(i++);
-        if(vert.get() == 0){
-            vert.reset(new rviz::Axes(scene_manager_, frame_node_));
-        }
-        Ogre::Vector3 pos(vertex.pose.position.x,
-                vertex.pose.position.y,
-                vertex.pose.position.z);
-        vert->setPosition(pos);
-        Ogre::Quaternion orient(vertex.pose.orientation.w,
-                vertex.pose.orientation.x,
-                vertex.pose.orientation.y,
-                vertex.pose.orientation.z);
-        vert->setOrientation(orient);
-    }
+    point_edges_.swap(newpointedges);
+    delete[] newpoints;
 
     std::vector<boost::shared_ptr<rviz::BillboardLine> > newgraphedges;
-    std::vector<boost::shared_ptr<rviz::BillboardLine> > newpointedges;
-    for(const auto vertex : msg->vertices){
-        Ogre::Vector3 p0(vertex.pose.position.x,
-                vertex.pose.position.y,
-                vertex.pose.position.z);
-        if(show_point_connections_){
-            for(const auto point : vertex.points){
-                boost::shared_ptr<rviz::BillboardLine> eln(new rviz::BillboardLine( scene_manager_, frame_node_ ));
-                Ogre::Vector3 p1(newpoints[point.data].position);
-                eln->addPoint(p0);
-                eln->addPoint(p1);
-                eln->setColor(point_color_.r, point_color_.g, point_color_.b, alpha_);
-                eln->setLineWidth( edge_width_/2.0 );
-                newpointedges.push_back(eln);
-            }
-        }
-        for(const auto nb : vertex.neighbors){
-            boost::shared_ptr<rviz::BillboardLine> eln(new rviz::BillboardLine( scene_manager_, frame_node_ ));
-            Ogre::Vector3 p1(msg->vertices.at(nb.data).pose.position.x,
-                    msg->vertices.at(nb.data).pose.position.y,
-                    msg->vertices.at(nb.data).pose.position.z);
-            eln->addPoint(p0);
-            eln->addPoint(p1);
-            eln->setColor(edge_color_.r, edge_color_.g, edge_color_.b, alpha_);
-            eln->setLineWidth( edge_width_ );
-            newgraphedges.push_back(eln);
-        }
+    for(const auto edge : msg->edges){
+        Eigen::Affine3d T_world_from_1=vertex_table[ edge.id1 ];
+        Ogre::Vector3 p0( T_world_from_1.translation()(0),
+                          T_world_from_1.translation()(1),
+                          T_world_from_1.translation()(2));
+        Eigen::Affine3d T_world_from_2=vertex_table[ edge.id2 ];
+        Ogre::Vector3 p1( T_world_from_2.translation()(0),
+                          T_world_from_2.translation()(1),
+                          T_world_from_2.translation()(2));
+        double alpha = std::min(1.0, edge.strength/100.0);
+        newgraphedges.push_back(
+                boost::shared_ptr<rviz::BillboardLine>(
+                    new rviz::BillboardLine( scene_manager_, frame_node_ )
+                    )
+                );
+        newgraphedges.back()->addPoint(p0);
+        newgraphedges.back()->addPoint(p1);
+        newgraphedges.back()->setColor(edge.color.r,
+                                       edge.color.g,
+                                       edge.color.b,
+                                       alpha);
     }
     graph_edges_.swap(newgraphedges);
-    point_edges_.swap(newpointedges);
-
-    delete[] newpoints;
 }
 
 // Position and orientation are passed through to the SceneNode.
