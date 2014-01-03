@@ -104,7 +104,7 @@
         pkg="rosbag"
         type="play"
         name="replay"
-        args="$(arg bag) --clock --pause --topics navigation/left/camera_info navigation/left/image_raw navigation/right/camera_info navigation/right/image_raw tf odometry"
+        args="$(arg bag) -r 0.5 --clock --pause --topics navigation/left/camera_info navigation/left/image_raw navigation/right/camera_info navigation/right/image_raw tf odometry"
         output="screen"
         >
         <remap from="/navigation/left/camera_info" to="left/camera_info"/>
