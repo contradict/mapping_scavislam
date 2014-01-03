@@ -40,7 +40,6 @@
 
 
 #include <opencv2/calib3d/calib3d.hpp>
-//#include <visiontools/accessor_macros.h>
 
 //#include "global.h"
 
