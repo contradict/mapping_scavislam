@@ -105,6 +105,17 @@ void SLAMGraphVisual::setMessage( const scavislam_messages::SLAMGraph::ConstPtr&
                                 q.z());
         vert->setOrientation(orient);
         vert->setToDefaultColors();
+        if( doublewindow[vertex.own_id] == 1 ) {
+            Ogre::ColourValue c=vert->getDefaultXColor();
+            c.a*=0.5;
+            vert->setXColor(c);
+            c=vert->getDefaultYColor();
+            c.a*=0.5;
+            vert->setYColor(c);
+            c=vert->getDefaultZColor();
+            c.a*=0.5;
+            vert->setZColor(c);
+        }
         vertex_table.insert(std::pair<int, Eigen::Affine3d>(vertex.own_id, vpose));
     }
     for( int j=i; j<vertices_.size(); j++ ) {
