@@ -255,8 +255,9 @@ void StereoVSLAMNode::InitVSLAM()
                                      0, 1, 1, cv::BORDER_REPLICATE);
 
 
+    StereoFrontend::Parameters params;
     frontend =
-        new StereoFrontend(frame_data, per_mon);
+        new StereoFrontend(frame_data, per_mon, params);
     frontend->initialize();
 
     pla_reg = new PlaceRecognizer(stereo_camera, config.wordspath);
@@ -314,6 +315,24 @@ void StereoVSLAMNode::configCb(Config &newconfig, uint32_t level)
             config.wordspath.c_str(),
             config.queue_size,
             config.approximate_sync);
+
+    StereoFrontend::Parameters params;
+    params.parallax_threshold = config.parallax_threshold;
+    params.newpoint_clearance = config.newpoint_clearance;
+    params.covis_threshold = config.covis_threshold;
+    params.new_keyframe_featureless_corners_thr = config.new_keyframe_featureless_corners_thr;
+    params.use_n_levels_in_frontend = config.use_n_levels_in_frontend;
+    params.ui_min_num_points = config.ui_min_num_points;
+    params.num_disp16 = config.num_disp16;
+    params.stereo_method = config.stereo_method;
+    params.stereo_iters = config.stereo_iters;
+    params.stereo_levels = config.stereo_levels;
+    params.stereo_nr_plane = config.stereo_nr_plane;
+    params.var_num_max_points = config.var_num_max_points;
+    params.max_reproj_error = config.max_reproj_error;
+    if( frontend ) {
+        frontend->SetParameters(params);
+    }
 }
 
 void StereoVSLAMNode::imageCb(
