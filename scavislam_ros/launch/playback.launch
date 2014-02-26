@@ -3,100 +3,34 @@
 <launch>
     <arg name="bag"/>
 
+    <include file="$(find scavislam_ros)/launch/stereopair.launch">
+        <arg name="position" value="port"/>>
+    </include>
+
+    <include file="$(find scavislam_ros)/launch/stereopair.launch">
+        <arg name="position" value="center"/>>
+    </include>
+
+    <include file="$(find scavislam_ros)/launch/stereopair.launch">
+        <arg name="position" value="starboard"/>>
+    </include>
+
     <node
-        pkg="nodelet"
-        type="nodelet"
-        name="image_proc_manager"
-        args="manager"
-        output="log"
-        />
-    <!-- Debayer -->
-    <node
-          pkg="nodelet"
-          type="nodelet"
-          name="debayer"
-          args="load image_proc/debayer /image_proc_manager"
-          ns="left"
-          output="log"
-          >
-    </node>
-    <node
-          pkg="nodelet"
-          type="nodelet"
-          name="debayer"
-          args="load image_proc/debayer /image_proc_manager"
-          ns="right"
-          output="log"
-          >
+        pkg="costmap_2d"
+        type="costmap_2d_node"
+        name="local_mapper"
+        output="screen"
+        ns="/cameras/navigation">
+        <rosparam file="$(find scavislam_ros)/config/costmap_params.yaml" ns="costmap" command="load"/>
     </node>
 
-    <!-- Rectify images -->
     <node
-        pkg="nodelet"
-        type="nodelet"
-        name="rect"
-        args="load image_proc/rectify /image_proc_manager"
-        ns="left"
-        output="log"
-        >
-    </node>
-    <node
-        pkg="nodelet"
-        type="nodelet"
-        name="rect_color"
-        args="load image_proc/rectify /image_proc_manager"
-        ns="left"
-        output="log"
-        >
-        <remap from="image_mono" to="image_color"/>
-        <remap from="image_rect" to="image_rect_color"/>
-    </node>
-    <node
-        pkg="nodelet"
-        type="nodelet"
-        name="rect"
-        args="load image_proc/rectify /image_proc_manager"
-        ns="right"
-        output="log"
-        >
-    </node>
-    <node
-        pkg="nodelet"
-        type="nodelet"
-        name="rect_color"
-        args="load image_proc/rectify /mimage_proc_anager"
-        ns="right"
-        output="log"
-        >
-        <remap from="image_mono" to="image_color"/>
-        <remap from="image_rect" to="image_rect_color"/>
-    </node>
-
-    <!-- Compute Stereo -->
-    <node
-        pkg="nodelet"
-        type="nodelet"
-        name="stereo_image_disparity"
-        args="load stereo_image_proc/disparity /image_proc_manager"
-        output="log"
-        >
-        <param name="correlation_window_size" type="int" value="17"/>
-        <param name="min_disparity" type="int" value="0"/>
-        <param name="disparity_range" type="int" value="128"/>
-        <param name="uniqueness_ratio" type="int" value="5"/>
-        <param name="texture_threshold" type="int" value="1000"/>
-        <param name="approximate_sync" type="bool" value="true"/>
-    </node>
-
-    <!-- Compute Stereo Point Cloud -->
-    <node
-        pkg="nodelet"
-        type="nodelet"
-        name="stereo_image_points"
-        args="load stereo_image_proc/point_cloud2 /image_proc_manager"
-        output="log"
-        >
-        <param name="approximate_sync" type="bool" value="true"/>
+        pkg="costmap_2d"
+        type="costmap_2d_cloud"
+        name="voxel2cloud"
+        output="screen"
+        ns="/cameras/navigation">
+        <remap from="voxel_grid" to="local_mapper/costmap/obstacle_layer/voxel_grid"/>
     </node>
 
     <param name="use_sim_time" value="True" type="bool"/>
@@ -104,13 +38,23 @@
         pkg="rosbag"
         type="play"
         name="replay"
-        args="$(arg bag) -r 0.5 --clock --pause --topics navigation/left/camera_info navigation/left/image_raw navigation/right/camera_info navigation/right/image_raw tf odometry"
+        args="$(arg bag) -r 0.25 --clock --pause
+        --topics tf
+                 /cameras/navigation/port/left/camera_info
+                 /cameras/navigation/port/left/image_raw 
+                 /cameras/navigation/port/right/camera_info 
+                 /cameras/navigation/port/right/image_raw 
+                 /cameras/navigation/center/left/camera_info
+                 /cameras/navigation/center/left/image_raw 
+                 /cameras/navigation/center/right/camera_info 
+                 /cameras/navigation/center/right/image_raw 
+                 /cameras/navigation/starboard/left/camera_info
+                 /cameras/navigation/starboard/left/image_raw 
+                 /cameras/navigation/starboard/right/camera_info 
+                 /cameras/navigation/starboard/right/image_raw 
+                 /motion/odometry"
         output="screen"
         >
-        <remap from="/navigation/left/camera_info" to="left/camera_info"/>
-        <remap from="/navigation/left/image_raw" to="left/image_raw"/>
-        <remap from="/navigation/right/camera_info" to="right/camera_info"/>
-        <remap from="/navigation/right/image_raw" to="right/image_raw"/>
-        <remap from="/odometry" to="wheel_odometry"/>
+        <remap from="/motion/odometry" to="wheel_odometry"/>
     </node>
 </launch>

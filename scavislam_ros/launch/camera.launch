@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<!-- vim: set fenc=utf-8 et sts=4 ft=xml : -->
+<launch>
+    <arg name="namespace"/>
+    <arg name="side"/>
+
+    <!-- Debayer -->
+    <node
+          pkg="nodelet"
+          type="nodelet"
+          name="debayer"
+          args="load image_proc/debayer $(arg namespace)/manager"
+          output="log"
+          ns="$(arg namespace)/$(arg side)"
+          >
+    </node>
+
+    <!-- Rectify images -->
+    <node
+        pkg="nodelet"
+        type="nodelet"
+        name="rect"
+        args="load image_proc/rectify $(arg namespace)/manager"
+        output="log"
+        ns="$(arg namespace)/$(arg side)"
+        >
+    </node>
+    <node
+        pkg="nodelet"
+        type="nodelet"
+        name="rect_color"
+        args="load image_proc/rectify $(arg namespace)/manager"
+        ns="$(arg namespace)/$(arg side)"
+        output="log"
+        >
+        <remap from="image_mono" to="image_color"/>
+        <remap from="image_rect" to="image_rect_color"/>
+    </node>
+
+</launch>

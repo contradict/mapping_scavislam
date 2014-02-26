@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<!-- vim: set fenc=utf-8 et sts=4 ft=xml : -->
+<launch>
+    <arg name="position"/>
+
+    <node
+        pkg="nodelet"
+        type="nodelet"
+        name="manager"
+        args="manager"
+        output="log"
+        ns="/cameras/navigation/$(arg position)"
+        />
+    <include file="$(find scavislam_ros)/launch/camera.launch">
+        <arg name="namespace" value="/cameras/navigation/$(arg position)"/>
+        <arg name="side" value="left"/>
+    </include>
+    <include file="$(find scavislam_ros)/launch/camera.launch">
+        <arg name="namespace" value="/cameras/navigation/$(arg position)"/>
+        <arg name="side" value="right"/>
+    </include>
+    <!-- Compute Stereo -->
+    <node
+        pkg="nodelet"
+        type="nodelet"
+        name="stereo_image_disparity"
+        args="load stereo_image_proc/disparity /cameras/navigation/$(arg position)/manager"
+        output="log"
+        ns="/cameras/navigation/$(arg position)"
+        >
+        <param name="correlation_window_size" type="int" value="17"/>
+        <param name="min_disparity" type="int" value="0"/>
+        <param name="disparity_range" type="int" value="128"/>
+        <param name="uniqueness_ratio" type="int" value="5"/>
+        <param name="texture_threshold" type="int" value="1000"/>
+        <param name="approximate_sync" type="bool" value="true"/>
+    </node>
+
+    <!-- Compute Stereo Point Cloud -->
+    <node
+        pkg="nodelet"
+        type="nodelet"
+        name="stereo_image_points"
+        args="load stereo_image_proc/point_cloud2 /cameras/navigation/$(arg position)/manager"
+        output="log"
+        ns="/cameras/navigation/$(arg position)"
+        >
+        <param name="approximate_sync" type="bool" value="true"/>
+    </node>
+
+</launch>
