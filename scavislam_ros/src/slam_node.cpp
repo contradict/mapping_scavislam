@@ -374,6 +374,14 @@ void StereoVSLAMNode::imageCb(
 
     float ui_fps = per_mon->fps();
     processNextFrame(l_image, r_image);
+
+    PlaceRecognizerData data;
+    data.keyframe_id = frame_data->frame_id;
+    data.keyframe.pyr = frame_data->cur_left().pyr_uint8;
+    data.keyframe.disp = frame_data->disp;
+    pla_reg->monitor.query(data);
+
+    publishDisparity(l_image_msg, l_info_msg);
     NeighborhoodPtr neighborhood;
     backend->monitor.queryNeighborhood(frontend->actkey_id);
 
@@ -383,17 +391,26 @@ void StereoVSLAMNode::imageCb(
                 != neighborhood->vertex_map.end())
         {
             frontend->neighborhood() = neighborhood;
-        } else {
-            ROS_INFO("Current active keyframe not in backend neighborhood");
         }
         publishNeighborhood(neighborhood, l_info_msg);
     }
     bool is_frame_droped = false;
     bool tracking_worked = frontend->processFrame(&is_frame_droped);
-    publishDisparity(l_image_msg, l_info_msg);
     if(tracking_worked==false)
     {
         ROS_ERROR("Tracking Failed.");
+        DetectedLoop response;
+        if(pla_reg->monitor.getQueryResponse(&response)){
+            ROS_INFO_STREAM("query matched keyframe: " << response.loop_keyframe_id);
+            ROS_INFO_STREAM("T_query_from_loop: " << response.T_query_from_loop.translation().transpose()
+                    << " <" << response.T_query_from_loop.unit_quaternion().w()
+                    << ", " << response.T_query_from_loop.unit_quaternion().x()
+                    << ", " << response.T_query_from_loop.unit_quaternion().y()
+                    << ", " << response.T_query_from_loop.unit_quaternion().z()
+                    << " >");
+            SE3d T_loop_from_w = GET_MAP_ELEM(response.loop_keyframe_id, neighborhood->vertex_map).T_me_from_w;
+            SE3d T_cur_from_w = response.T_query_from_loop*T_loop_from_w;
+        }
         return;
     }
     publishPose(l_info_msg);
