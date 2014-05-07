@@ -213,10 +213,15 @@ void StereoVSLAMNode::InitROS()
     // Queue size 1 should be OK; the one that matters is the synchronizer queue size.
     /// @todo Allow remapping left, right?
     image_transport::TransportHints hints("raw", ros::TransportHints(), private_nh);
-    sub_l_image_.subscribe(*it_, "left/image_rect", 1, hints);
-    sub_l_info_ .subscribe(nh,   "left/camera_info", 1);
-    sub_r_image_.subscribe(*it_, "right/image_rect", 1, hints);
-    sub_r_info_ .subscribe(nh,   "right/camera_info", 1);
+    std::string pair = nh.resolveName("stereopair");
+    std::string left_img_topic = pair+"/left/image_rect";
+    sub_l_image_.subscribe(*it_, left_img_topic, 1, hints);
+    std::string left_inf_topic = pair+"/left/camera_info";
+    sub_l_info_.subscribe(nh,   left_inf_topic, 1);
+    std::string right_img_topic = pair+"/right/image_rect";
+    sub_r_image_.subscribe(*it_, right_img_topic, 1, hints);
+    std::string right_inf_topic = pair+"/right/camera_info";
+    sub_r_info_.subscribe(nh,   right_inf_topic, 1);
 }
 
 void StereoVSLAMNode::InitVSLAM()
