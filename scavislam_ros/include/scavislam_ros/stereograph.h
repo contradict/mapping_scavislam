@@ -43,6 +43,9 @@ POINT_CLOUD_REGISTER_POINT_STRUCT (FeatureTablePoint,
 
 namespace scavislam_ros {
 
+void poseToMessage(const Sophus::SE3d pose,
+                   geometry_msgs::Pose *p);
+
 void StereoGraphToMessage(const ScaViSLAM::StereoGraph& graph,
                           const Sophus::SE3d& T_base_from_camera,
                           scavislam_messages::SLAMGraph *msg);
