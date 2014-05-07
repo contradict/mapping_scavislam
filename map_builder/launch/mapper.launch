@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!-- vim: set fenc=utf-8 et sts=4 ft=xml : -->
+<launch>
+
+    <node
+        ns="/processes/map"
+        name="global_map"
+        pkg="scavislam_ros"
+        type="costmap_node"
+        machine="navigate"
+        >
+        <rosparam
+            file="$(find scavislam_ros)/config/transient_map.yml"
+            ns="transient_map"
+            command="load"/>
+    </node>
+
+    <node
+        ns="/processes/map"
+        name="slam"
+        pkg="scavislam_ros"
+        type="stereo_vslam_node"
+        machine="navigate"
+        >
+        <param name="wordspath" type="string" value="$(find ScaViSLAM)/data/surfwords9983.png"/>
+        <param name="num_disp16" type="int" value="8"/>
+        <param name="stereo_preset" type="int" value="1"/>
+        <param name="stereo_method" type="int" value="1"/>
+
+        <remap from="stereopair" to="/cameras/navigation/center"/>
+    </node>
+</launch>
