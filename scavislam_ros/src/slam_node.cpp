@@ -25,6 +25,7 @@
 #include <geometry_msgs/Point.h>
 #include <stereo_msgs/DisparityImage.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
 #include <scavislam_messages/SLAMGraph.h>
 
 #include <scavislam_ros/StereoVSLAMConfig.h>
@@ -87,6 +88,7 @@ class StereoVSLAMNode
         ros::Publisher pub_disparity_;
         ros::Publisher pub_neighborhood_;
         ros::Publisher pub_full_graph_;
+        ros::Publisher pub_path_;
         ros::Publisher pub_odometry_;
 
         tf::TransformBroadcaster pose_;
@@ -116,7 +118,7 @@ class StereoVSLAMNode
         cv::Ptr<cv::gpu::FilterEngine_GPU> dy_filter_;
 
         void InitVSLAM();
-        void processNextFrame(cv::Mat image_l, cv::Mat image_r);
+        void processNextFrame(cv::Mat image_l, cv::Mat image_r, ros::Time time);
 
         void fillDisparityGpu(DisparityImagePtr disp_msg);
         void publishDisparity(
@@ -133,6 +135,7 @@ class StereoVSLAMNode
                 const CameraInfoConstPtr& l_info_msg
                 );
          void publishPose(const CameraInfoConstPtr& l_info_msg);
+         void publishPath( const BackendDrawDataPtr graph_draw_data, const CameraInfoConstPtr& l_info_msg);
 
         void configCb(Config &config, uint32_t level);
 };
@@ -204,6 +207,7 @@ void StereoVSLAMNode::InitROS()
     pub_disparity_ = nh.advertise<DisparityImage>("gpu_disparity", 1 );
     pub_neighborhood_ = nh.advertise<scavislam_messages::SLAMGraph>("neighborhood", 1);
     pub_full_graph_ = nh.advertise<scavislam_messages::SLAMGraph>("slam_graph", 1);
+    pub_path_ = nh.advertise<nav_msgs::Path>("slam_path", 1);
     pub_odometry_ = nh.advertise<nav_msgs::Odometry>("odometry", 1);
 
     // Queue size 1 should be OK; the one that matters is the synchronizer queue size.
@@ -270,11 +274,12 @@ void StereoVSLAMNode::InitVSLAM()
 }
 
 void StereoVSLAMNode::
-processNextFrame(cv::Mat image_l, cv::Mat image_r)
+processNextFrame(cv::Mat image_l, cv::Mat image_r, ros::Time time)
 {
   frame_data->nextFrame();
 
   frame_data->cur_left().uint8 = image_l;
+  frame_data->cur_left().time = time;
 
   frame_data->right.uint8 = image_r;
 
@@ -361,7 +366,7 @@ void StereoVSLAMNode::imageCb(
     if (not vslam_init_)
     {
         InitVSLAM();
-        processNextFrame(l_image, r_image);
+        processNextFrame(l_image, r_image, l_image_msg->header.stamp);
         frontend->processFirstFrame();
         assert(frontend->to_optimizer_stack.size()==1);
         backend->monitor
@@ -374,7 +379,7 @@ void StereoVSLAMNode::imageCb(
     per_mon->new_frame();
 
     float ui_fps = per_mon->fps();
-    processNextFrame(l_image, r_image);
+    processNextFrame(l_image, r_image, l_image_msg->header.stamp);
 
     PlaceRecognizerData data;
     data.keyframe_id = frame_data->frame_id;
@@ -429,9 +434,16 @@ void StereoVSLAMNode::imageCb(
         ROS_INFO("Loop detected");
 
     BackendDrawDataPtr graph_draw_data(new BackendDrawData);
-    if(backend->monitor.getDrawData(&graph_draw_data))
-        publishFullGraph(graph_draw_data,
-                         l_info_msg);
+    if(backend->monitor.getDrawData(&graph_draw_data)) {
+        if( pub_full_graph_.getNumSubscribers() > 0 ) {
+            publishFullGraph(graph_draw_data,
+                    l_info_msg);
+        }
+        if( pub_path_.getNumSubscribers() > 0 ) {
+            publishPath(graph_draw_data,
+                    l_info_msg);
+        }
+    }
 }
 
 
@@ -542,6 +554,33 @@ void StereoVSLAMNode::publishFullGraph(
     msg.header.stamp = l_info_msg->header.stamp;
     msg.header.frame_id = "map";
     pub_full_graph_.publish(msg);
+}
+
+
+void StereoVSLAMNode::publishPath(
+        const BackendDrawDataPtr graph_draw_data,
+        const CameraInfoConstPtr& l_info_msg)
+{
+    nav_msgs::Path path;
+
+    SE3d T_base_from_camera;
+    if(!lookupCameraTransform(l_info_msg->header.frame_id, &T_base_from_camera))
+        return;
+
+    path.header.seq = l_info_msg->header.seq;
+    path.header.stamp = l_info_msg->header.stamp;
+    path.header.frame_id = "map";
+    int seq=0;
+    for( auto pr : graph_draw_data->vertex_table ) {
+        geometry_msgs::PoseStamped pose;
+        SE3d T_base_from_world = T_base_from_camera.inverse()*pr.second->T_me_from_world;
+        scavislam_ros::poseToMessage(T_base_from_world, &pose.pose);
+        pose.header.seq = seq++;
+        pose.header.stamp = pr.second->time;
+        pose.header.frame_id = "map";
+        path.poses.push_back( pose );
+    }
+    pub_path_.publish(path);
 }
 
 void StereoVSLAMNode::publishPose(const CameraInfoConstPtr& l_info_msg)
