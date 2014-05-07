@@ -3,6 +3,8 @@
 <launch>
     <arg name="bag"/>
 
+    <param name="use_sim_time" value="True" type="bool"/>
+
     <include file="$(find scavislam_ros)/launch/stereopair.launch">
         <arg name="position" value="port"/>>
     </include>
@@ -33,14 +35,13 @@
         <remap from="voxel_grid" to="local_mapper/costmap/obstacle_layer/voxel_grid"/>
     </node>
 
-    <param name="use_sim_time" value="True" type="bool"/>
     <node
         pkg="rosbag"
         type="play"
         name="replay"
         args="$(arg bag) -r 0.25 --clock --pause
         --topics tf
-                 /cameras/navigation/port/left/camera_info
+                 /cameras/navigation/port/left/camera_info 
                  /cameras/navigation/port/left/image_raw 
                  /cameras/navigation/port/right/camera_info 
                  /cameras/navigation/port/right/image_raw 
@@ -52,7 +53,8 @@
                  /cameras/navigation/starboard/left/image_raw 
                  /cameras/navigation/starboard/right/camera_info 
                  /cameras/navigation/starboard/right/image_raw 
-                 /motion/odometry"
+                 /motion/odometry
+                 "
         output="screen"
         >
         <remap from="/motion/odometry" to="wheel_odometry"/>
