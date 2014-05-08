@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(map_builder)
 
+set(CMAKE_BUILD_TYPE Debug)
+
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -16,7 +18,6 @@ find_package(catkin REQUIRED COMPONENTS
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(eigen REQUIRED)
-
 
 add_definitions("-std=c++11")
 
@@ -101,6 +102,7 @@ catkin_package(
 # include_directories(include)
 # TODO: Check names of system library include directories (eigen)
 include_directories(
+    include
   ${catkin_INCLUDE_DIRS}
   ${eigen_INCLUDE_DIRS}
 )
@@ -114,6 +116,7 @@ include_directories(
 # add_executable(map_builder_node src/map_builder_node.cpp)
 add_executable(costmap_node
     src/costmap_node.cpp
+    src/binary_map.cpp
     )
 target_link_libraries(costmap_node
     ${catkin_LIBRARIES}
