@@ -5,7 +5,7 @@
 	path = Sophus
 	url = git://github.com/contradict/Sophus.git
 [submodule "Pangolin"]
-	path = Pangolin
+	path = pangolin
 	url = git://github.com/contradict/Pangolin.git
 [submodule "ScaViSLAM"]
 	path = ScaViSLAM
