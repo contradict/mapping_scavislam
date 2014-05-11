@@ -83,6 +83,7 @@ class StereoVSLAMNode
         typedef message_filters::Synchronizer<ApproximatePolicy> ApproximateSync;
         boost::shared_ptr<ExactSync> exact_sync_;
         boost::shared_ptr<ApproximateSync> approximate_sync_;
+        ros::Subscriber odometry_;
 
         // Publications
         ros::Publisher pub_disparity_;
@@ -138,7 +139,9 @@ class StereoVSLAMNode
          void publishPose(const CameraInfoConstPtr& l_info_msg);
          void publishPath( const BackendDrawDataPtr graph_draw_data, const CameraInfoConstPtr& l_info_msg);
 
-        void configCb(Config &config, uint32_t level);
+         void odometryCallback( nav_msgs::Odometry::ConstPtr odom );
+
+         void configCb(Config &config, uint32_t level);
 };
 
 StereoVSLAMNode::StereoVSLAMNode()
@@ -209,7 +212,7 @@ void StereoVSLAMNode::InitROS()
     pub_neighborhood_ = nh.advertise<scavislam_messages::SLAMGraph>("neighborhood", 1);
     pub_full_graph_ = nh.advertise<scavislam_messages::SLAMGraph>("slam_graph", 1);
     pub_path_ = nh.advertise<nav_msgs::Path>("slam_path", 1);
-    pub_odometry_ = nh.advertise<nav_msgs::Odometry>("odometry", 1);
+    pub_odometry_ = nh.advertise<nav_msgs::Odometry>("visual_odometry", 1);
 
     // Queue size 1 should be OK; the one that matters is the synchronizer queue size.
     /// @todo Allow remapping left, right?
@@ -223,6 +226,8 @@ void StereoVSLAMNode::InitROS()
     sub_r_image_.subscribe(*it_, right_img_topic, 1, hints);
     std::string right_inf_topic = pair+"/right/camera_info";
     sub_r_info_.subscribe(nh,   right_inf_topic, 1);
+
+    odometry_ = nh.subscribe("wheel_odometry", 1, &StereoVSLAMNode::odometryCallback, this);
 }
 
 void StereoVSLAMNode::InitVSLAM()
@@ -410,6 +415,7 @@ void StereoVSLAMNode::imageCb(
     }
     bool is_frame_droped = false;
     bool tracking_worked = frontend->processFrame(&is_frame_droped);
+    publishPose(l_info_msg);
     if(tracking_worked==false)
     {
         ROS_ERROR("Tracking Failed.");
@@ -427,7 +433,6 @@ void StereoVSLAMNode::imageCb(
         }
         return;
     }
-    publishPose(l_info_msg);
     if (is_frame_droped)
     {
         assert(frontend->to_optimizer_stack.size()==1);
@@ -454,6 +459,38 @@ void StereoVSLAMNode::imageCb(
     }
 }
 
+void StereoVSLAMNode::odometryCallback( nav_msgs::Odometry::ConstPtr odom )
+{
+    SE3d T_camera0_to_cameraNow;
+    if( !frontend )
+        return;
+    frontend->currentPose(T_camera0_to_cameraNow);
+    SE3d T_camera_to_base;
+    if(!lookupTransform(camera_frame_id_, &T_camera_to_base))
+        return;
+
+    Eigen::Vector3d odom_trans;
+    tf::pointMsgToEigen( odom->pose.pose.position, odom_trans );
+    Eigen::Quaterniond odom_rot;
+    tf::quaternionMsgToEigen( odom->pose.pose.orientation, odom_rot);
+    SE3d T_base0_to_baseNow_wheel( odom_rot, odom_trans );
+    SE3d T_base0_to_baseNow_camera = T_camera_to_base*T_camera0_to_cameraNow*T_camera_to_base.inverse();
+
+    SE3d T_map_to_odom = T_base0_to_baseNow_camera*T_base0_to_baseNow_wheel.inverse();
+
+    tf::Transform tf_map_to_odom;
+    tf::Vector3 origin;
+    tf::vectorEigenToTF( T_map_to_odom.translation(), origin );
+    tf::Quaternion orientation;
+    tf::quaternionEigenToTF( T_map_to_odom.so3().unit_quaternion(), orientation );
+    tf_map_to_odom.setOrigin(origin);
+    tf_map_to_odom.setRotation(orientation);
+    tf::StampedTransform tfmap_to_odom_stamped(tf_map_to_odom,
+            odom->header.stamp,
+            "map",
+            "odom");
+    pose_.sendTransform( tfmap_to_odom_stamped );
+}
 
 void StereoVSLAMNode::publishDisparity(
         const ImageConstPtr& l_image_msg,
