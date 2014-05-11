@@ -428,8 +428,11 @@ void StereoVSLAMNode::imageCb(
                     << ", " << response.T_query_from_loop.unit_quaternion().y()
                     << ", " << response.T_query_from_loop.unit_quaternion().z()
                     << " >");
-            SE3d T_loop_from_w = GET_MAP_ELEM(response.loop_keyframe_id, neighborhood->vertex_map).T_me_from_w;
-            SE3d T_cur_from_w = response.T_query_from_loop*T_loop_from_w;
+            if( IS_IN_SET( response.loop_keyframe_id, neighborhood->vertex_map) )
+            {
+                SE3d T_loop_from_w = GET_MAP_ELEM(response.loop_keyframe_id, neighborhood->vertex_map).T_me_from_w;
+                SE3d T_cur_from_w = response.T_query_from_loop*T_loop_from_w;
+            }
         }
         return;
     }
