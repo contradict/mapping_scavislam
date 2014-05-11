@@ -28,7 +28,7 @@ add_definitions(-DQT_NO_KEYWORDS)
 ## Here we specify which header files need to be run through "moc",
 ## Qt's meta-object compiler.
 qt4_wrap_cpp(MOC_FILES
-  include/slamgraph_display.h
+  include/scavislam_rviz/slamgraph_display.h
 )
 
 ## Here we specify the list of source files, including the output of

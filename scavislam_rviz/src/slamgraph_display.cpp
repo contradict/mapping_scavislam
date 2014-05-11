@@ -12,9 +12,9 @@
 #include <rviz/frame_manager.h>
 #include <rviz/ogre_helpers/point_cloud.h>
 
-#include "slamgraph_visual.h"
+#include "scavislam_rviz/slamgraph_visual.h"
 
-#include "slamgraph_display.h"
+#include "scavislam_rviz/slamgraph_display.h"
 
 namespace scavislam_rviz
 {
