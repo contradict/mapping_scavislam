@@ -57,6 +57,7 @@ public:
   void setVertexScale( float s );
   void setEdgeWidth( float w );
   void setShowPointConnections(bool c);
+  void setShowPoints(bool c);
 
 private:
   // The object implementing the actual arrow shape
@@ -73,6 +74,7 @@ private:
   float edge_width_;
 
   bool show_point_connections_;
+  bool show_points_;
 
   // A SceneNode whose pose is set to match the coordinate frame of
   // the SLAMGraph message header.

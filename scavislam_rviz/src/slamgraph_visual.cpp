@@ -23,7 +23,9 @@ namespace scavislam_rviz
 {
 
 // BEGIN_TUTORIAL
-SLAMGraphVisual::SLAMGraphVisual( Ogre::SceneManager* scene_manager, Ogre::SceneNode* parent_node )
+SLAMGraphVisual::SLAMGraphVisual( Ogre::SceneManager* scene_manager, Ogre::SceneNode* parent_node ):
+    show_points_(false),
+    show_point_connections_(false)
 {
     scene_manager_ = scene_manager;
 
@@ -126,36 +128,41 @@ void SLAMGraphVisual::setMessage( const scavislam_messages::SLAMGraph::ConstPtr&
     }
 
     /* Use transforms from vertex table to draw points */
-    rviz::PointCloud::Point *newpoints = new rviz::PointCloud::Point[msg->points.size()];
-    std::vector<boost::shared_ptr<rviz::BillboardLine> > newpointedges;
-    i=0;
-    for(const auto point :msg->points) {
-        newpoints[i].color = point_color_;
-        Eigen::Vector3d ap;
-        tf::vectorMsgToEigen(point.xyz_anchor, ap);
-        Eigen::Affine3d T_world_from_anchorframe=vertex_table[ point.anchorframe_id ];
-        Eigen::Vector3d wp=T_world_from_anchorframe*T_camera_to_base*ap;
-        newpoints[i].position[0]=wp(0);
-        newpoints[i].position[1]=wp(1);
-        newpoints[i].position[2]=wp(2);
-        if( show_point_connections_ ) {
-            newpointedges.push_back(
-                    boost::shared_ptr<rviz::BillboardLine>(
-                        new rviz::BillboardLine( scene_manager_, frame_node_ )
-                        )
-                    );
-            Ogre::Vector3 p0( T_world_from_anchorframe.translation()(0),
-                    T_world_from_anchorframe.translation()(1),
-                    T_world_from_anchorframe.translation()(2));
-            newpointedges.back()->addPoint(p0);
-            newpointedges.back()->addPoint(newpoints[i].position);
+    if( show_points_ ) {
+        rviz::PointCloud::Point *newpoints = new rviz::PointCloud::Point[msg->points.size()];
+        std::vector<boost::shared_ptr<rviz::BillboardLine> > newpointedges;
+        i=0;
+        for(const auto point :msg->points) {
+            newpoints[i].color = point_color_;
+            Eigen::Vector3d ap;
+            tf::vectorMsgToEigen(point.xyz_anchor, ap);
+            Eigen::Affine3d T_world_from_anchorframe=vertex_table[ point.anchorframe_id ];
+            Eigen::Vector3d wp=T_world_from_anchorframe*T_camera_to_base*ap;
+            newpoints[i].position[0]=wp(0);
+            newpoints[i].position[1]=wp(1);
+            newpoints[i].position[2]=wp(2);
+            if( show_point_connections_ ) {
+                newpointedges.push_back(
+                        boost::shared_ptr<rviz::BillboardLine>(
+                            new rviz::BillboardLine( scene_manager_, frame_node_ )
+                            )
+                        );
+                Ogre::Vector3 p0( T_world_from_anchorframe.translation()(0),
+                        T_world_from_anchorframe.translation()(1),
+                        T_world_from_anchorframe.translation()(2));
+                newpointedges.back()->addPoint(p0);
+                newpointedges.back()->addPoint(newpoints[i].position);
+            }
+            i++;
         }
-        i++;
+        points_->clear();
+        points_->addPoints(newpoints, i);
+        point_edges_.swap(newpointedges);
+        delete[] newpoints;
+    } else {
+        points_->clear();
+        point_edges_.clear();
     }
-    points_->clear();
-    points_->addPoints(newpoints, i);
-    point_edges_.swap(newpointedges);
-    delete[] newpoints;
 
     std::vector<boost::shared_ptr<rviz::BillboardLine> > newgraphedges;
     for(const auto edge : msg->edges){
@@ -242,6 +249,11 @@ void SLAMGraphVisual::setEdgeWidth(float w)
 void SLAMGraphVisual::setShowPointConnections(bool c)
 {
     show_point_connections_ = c;
+}
+
+void SLAMGraphVisual::setShowPoints(bool p)
+{
+    show_points_ = p;
 }
 
 } // end namespace rviz_plugin_tutorials

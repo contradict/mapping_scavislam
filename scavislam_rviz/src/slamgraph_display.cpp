@@ -32,6 +32,10 @@ SLAMGraphDisplay::SLAMGraphDisplay()
                                           "Show connections from anchor vertices to points.",
                                            this, SLOT( updatePointLines() ));
 
+  show_points_ = new rviz::BoolProperty( "Show feature points", false,
+                                         "Show SLAM feautures attached to each vertex.",
+                                           this, SLOT( updatePointVisibility() ));
+
   point_style_property_ = new rviz::EnumProperty("Point Style", "Flat Squares",
                                                  "Rendering mode for points,",
                                                  this, SLOT( updatePointStyle() ));
@@ -159,6 +163,17 @@ void SLAMGraphDisplay::updatePointLines()
   }
 }
 
+void SLAMGraphDisplay::updatePointVisibility()
+{
+  bool points = show_points_->getBool();
+
+  for( size_t i = 0; i < visuals_.size(); i++ )
+  {
+    visuals_[ i ]->setShowPoints( points );
+  }
+}
+
+
 // Set the number of past visuals to show.
 void SLAMGraphDisplay::updateHistoryLength()
 {
@@ -219,6 +234,9 @@ void SLAMGraphDisplay::processMessage( const scavislam_messages::SLAMGraph::Cons
 
   bool lines = show_point_connections_->getBool();
   visual->setShowPointConnections(lines);
+
+  bool points = show_points_->getBool();
+  visual->setShowPointConnections(points);
 
   // And send it to the end of the circular buffer
   visuals_.push_back(visual);
