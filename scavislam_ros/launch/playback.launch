@@ -35,12 +35,43 @@
         <remap from="voxel_grid" to="local_mapper/costmap/obstacle_layer/voxel_grid"/>
     </node>
 
+    <param name="robot_description"
+        command="$(find xacro)/xacro.py '$(find samplereturn)/urdf/robot.xacro'" />
+
+    <node name="state_publisher"
+          pkg="robot_state_publisher"
+          type="robot_state_publisher"
+          output="log"
+          ns="/motion">
+        <remap from="joint_states" to="platform_joint_state"/>
+        <param name="publish_frequency" type="double" value="10"/>
+    </node>
+
+    <node name="odometry"
+          pkg="platform_motion"
+          type="EKF_odometry"
+          output="log"
+          ns="/motion">
+        <param name="wheel_diameter" type="double" value="0.314"/>
+        <param name="odom_frame_id" type="string" value="/odom"/>
+    </node>
+
+    <!--
+    <node name="fake_localization"
+          pkg="fake_localization"
+          type="fake_localization"
+          output="log"
+          ns="/processes">
+          <remap from="base_pose_ground_truth" to="/motion/odometry"/>
+    </node>
+    -->
+
     <node
         pkg="rosbag"
         type="play"
         name="replay"
-        args="$(arg bag) -r 0.25 --clock --pause
-        --topics tf
+        args="$(arg bag) -r 0.10 --clock --pause
+        --topics /motion/platform_joint_state
                  /cameras/navigation/port/left/camera_info 
                  /cameras/navigation/port/left/image_raw 
                  /cameras/navigation/port/right/camera_info 
