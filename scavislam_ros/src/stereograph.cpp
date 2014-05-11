@@ -154,12 +154,12 @@ int pointTableToMessage( const ScaViSLAM::StereoGraph::PointTable& point_table,
 }
 
 void DrawDataToMessage(const ScaViSLAM::BackendDrawDataPtr graph_draw_data,
-                       const Sophus::SE3d& T_base_from_camera,
+                       const Sophus::SE3d& T_camera_to_base,
                        scavislam_messages::SLAMGraph *msg)
 {
 
-    poseToMessage(T_base_from_camera,
-                  &msg->T_base_from_camera);
+    poseToMessage(T_camera_to_base,
+                  &msg->T_camera_to_base);
 
     /*---------- edge table ---------------*/
     msg->edges.resize(graph_draw_data->edge_table.size() + graph_draw_data->new_edges.size());
@@ -199,12 +199,12 @@ void DrawDataToMessage(const ScaViSLAM::BackendDrawDataPtr graph_draw_data,
 }
 
 void StereoGraphToMessage(const ScaViSLAM::StereoGraph& graph,
-                          const Sophus::SE3d& T_base_from_camera,
+                          const Sophus::SE3d& T_camera_to_base,
                           scavislam_messages::SLAMGraph *msg)
 {
 
-    poseToMessage(T_base_from_camera,
-                  &msg->T_base_from_camera);
+    poseToMessage(T_camera_to_base,
+                  &msg->T_camera_to_base);
 
     windowTableToMessage( graph.double_window(),
                          &msg->doublewindow);
@@ -242,17 +242,16 @@ void MessageToStereoGraph(const scavislam_messages::SLAMGraphPtr msg,
 }
 
 void NeighborhoodToMessage(const ScaViSLAM::NeighborhoodPtr neighborhood,
-                           const Sophus::SE3d& T_base_from_camera,
+                           const Sophus::SE3d& T_camera_to_base,
                            scavislam_messages::SLAMGraph *msg)
 {
-    poseToMessage(T_base_from_camera,
-                  &msg->T_base_from_camera);
+    poseToMessage(T_camera_to_base,
+                  &msg->T_camera_to_base);
 
     msg->vertices.resize(neighborhood->vertex_map.size());
     int ii=0;
     for ( auto& pr : neighborhood->vertex_map ) {
         msg->vertices[ii].own_id = pr.first;
-        //Sophus::SE3d T1 = T_base_from_camera*(pr.second.T_me_from_w.inverse());
         poseToMessage(pr.second.T_me_from_w,
                       &msg->vertices[ii].pose);
 
@@ -290,8 +289,6 @@ void NeighborhoodToMessage(const ScaViSLAM::NeighborhoodPtr neighborhood,
     msg->points.resize(neighborhood->point_list.size());
     ii = 0;
     for( auto ap : neighborhood->point_list ) {
-        //Eigen::Vector3d pt(T_base_from_camera*(VisionTools::GET_MAP_ELEM(ap->anchor_id, neighborhood->vertex_map).T_me_from_w.inverse())
-        //        *ap->xyz_anchor);
         tf::vectorEigenToMsg(ap->xyz_anchor, msg->points[ii].xyz_anchor);
         msg->points[ii].anchorframe_id = ap->anchor_id;
         tf::vectorEigenToMsg(ap->anchor_obs_pyr, msg->points[ii].anchor_obs_pyr);

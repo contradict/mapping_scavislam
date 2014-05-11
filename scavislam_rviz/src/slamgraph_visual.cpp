@@ -78,8 +78,8 @@ void SLAMGraphVisual::setMessage( const scavislam_messages::SLAMGraph::ConstPtr&
     }
 
     /* extract camera extrinsics */
-    Eigen::Affine3d T_base_from_camera;
-    tf::poseMsgToEigen(msg->T_base_from_camera, T_base_from_camera);
+    Eigen::Affine3d T_camera_to_base;
+    tf::poseMsgToEigen(msg->T_camera_to_base, T_camera_to_base);
 
     /* build vertex table while drawing vertices */
     std::unordered_map<int, Eigen::Affine3d> vertex_table;
@@ -92,7 +92,7 @@ void SLAMGraphVisual::setMessage( const scavislam_messages::SLAMGraph::ConstPtr&
             vert.reset(new rviz::Axes(scene_manager_, frame_node_));
         Eigen::Affine3d vpose;
         tf::poseMsgToEigen( vertex.pose, vpose );
-        vpose = T_base_from_camera*vpose.inverse();
+        vpose = T_camera_to_base*vpose.inverse()*T_camera_to_base.inverse();
         Eigen::Vector3d t=vpose.translation();
         Ogre::Vector3 pos(t(0),
                           t(1),
@@ -134,7 +134,7 @@ void SLAMGraphVisual::setMessage( const scavislam_messages::SLAMGraph::ConstPtr&
         Eigen::Vector3d ap;
         tf::vectorMsgToEigen(point.xyz_anchor, ap);
         Eigen::Affine3d T_world_from_anchorframe=vertex_table[ point.anchorframe_id ];
-        Eigen::Vector3d wp=T_world_from_anchorframe*ap;
+        Eigen::Vector3d wp=T_world_from_anchorframe*T_camera_to_base*ap;
         newpoints[i].position[0]=wp(0);
         newpoints[i].position[1]=wp(1);
         newpoints[i].position[2]=wp(2);

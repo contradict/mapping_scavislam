@@ -116,6 +116,7 @@ class StereoVSLAMNode
         bool vslam_init_;
         cv::Ptr<cv::gpu::FilterEngine_GPU> dx_filter_;
         cv::Ptr<cv::gpu::FilterEngine_GPU> dy_filter_;
+        std::string camera_frame_id_;
 
         void InitVSLAM();
         void processNextFrame(cv::Mat image_l, cv::Mat image_r, ros::Time time);
@@ -125,7 +126,7 @@ class StereoVSLAMNode
                 const ImageConstPtr& l_image_msg,
                 const CameraInfoConstPtr& l_info_msg
                 );
-        bool lookupCameraTransform(const std::string& image_frame, SE3d *T_base_from_camera);
+        bool lookupTransform(const std::string& image_frame, SE3d *T_camera_to_base);
         void publishNeighborhood(
                 const NeighborhoodPtr neighborhood,
                 const CameraInfoConstPtr& l_info_msg
@@ -368,6 +369,8 @@ void StereoVSLAMNode::imageCb(
             const_cast<uint8_t*>(&r_image_msg->data[0]),
             r_image_msg->step);
 
+    camera_frame_id_ = l_info_msg->header.frame_id;
+
     if (not vslam_init_)
     {
         InitVSLAM();
@@ -506,21 +509,21 @@ void StereoVSLAMNode::publishDisparity(
     pub_disparity_.publish(disp_msg);
 }
 
-bool StereoVSLAMNode::lookupCameraTransform(const std::string& image_frame, SE3d *T_base_from_camera)
+bool StereoVSLAMNode::lookupTransform(const std::string& frame, SE3d *T_base_from_frame)
 {
-    tf::StampedTransform tfT_base_from_camera;
+    tf::StampedTransform tfT_base_from_frame;
     try {
-        listener_.lookupTransform("/base_link", image_frame, ros::Time(0), tfT_base_from_camera);
+        listener_.lookupTransform("/base_link", frame, ros::Time(0), tfT_base_from_frame);
     } catch (tf::TransformException ex) {
-        ROS_ERROR("Could not look up transform to cameras: %s", ex.what());
+        ROS_ERROR("Could not look up transform to %s: %s", frame.c_str(), ex.what());
         return false;
     }
 
     Eigen::Quaterniond q;
-    tf::quaternionTFToEigen(tfT_base_from_camera.getRotation(),q);
-    T_base_from_camera->so3() = SO3(q);
-    tf::vectorTFToEigen(tfT_base_from_camera.getOrigin(),
-                        T_base_from_camera->translation());
+    tf::quaternionTFToEigen(tfT_base_from_frame.getRotation(),q);
+    T_base_from_frame->so3() = SO3(q);
+    tf::vectorTFToEigen(tfT_base_from_frame.getOrigin(),
+                        T_base_from_frame->translation());
     return true;
 }
 
@@ -530,11 +533,11 @@ void StereoVSLAMNode::publishNeighborhood(
         )
 {
     scavislam_messages::SLAMGraph msg;
-    SE3d T_base_from_camera;
-    if(!lookupCameraTransform(l_info_msg->header.frame_id, &T_base_from_camera))
+    SE3d T_camera_to_base;
+    if(!lookupTransform(l_info_msg->header.frame_id, &T_camera_to_base))
         return;
 
-    scavislam_ros::NeighborhoodToMessage( neighborhood, T_base_from_camera, &msg);
+    scavislam_ros::NeighborhoodToMessage( neighborhood, T_camera_to_base, &msg);
     msg.header.seq = l_info_msg->header.seq;
     msg.header.stamp = l_info_msg->header.stamp;
     msg.header.frame_id = "map";
@@ -548,12 +551,12 @@ void StereoVSLAMNode::publishFullGraph(
 {
     scavislam_messages::SLAMGraph msg;
 
-    SE3d T_base_from_camera;
-    if(!lookupCameraTransform(l_info_msg->header.frame_id, &T_base_from_camera))
+    SE3d T_camera_to_base;
+    if(!lookupTransform(l_info_msg->header.frame_id, &T_camera_to_base))
         return;
 
     scavislam_ros::DrawDataToMessage( graph_draw_data,
-                                      T_base_from_camera,
+                                      T_camera_to_base,
                                       &msg);
     msg.header.seq = l_info_msg->header.seq;
     msg.header.stamp = l_info_msg->header.stamp;
@@ -568,8 +571,8 @@ void StereoVSLAMNode::publishPath(
 {
     nav_msgs::Path path;
 
-    SE3d T_base_from_camera;
-    if(!lookupCameraTransform(l_info_msg->header.frame_id, &T_base_from_camera))
+    SE3d T_camera_to_base;
+    if(!lookupTransform(l_info_msg->header.frame_id, &T_camera_to_base))
         return;
 
     path.header.seq = l_info_msg->header.seq;
@@ -578,7 +581,7 @@ void StereoVSLAMNode::publishPath(
     int seq=0;
     for( auto pr : graph_draw_data->vertex_table ) {
         geometry_msgs::PoseStamped pose;
-        SE3d T_base_from_world = T_base_from_camera.inverse()*pr.second->T_me_from_world;
+        SE3d T_base_from_world = T_camera_to_base*pr.second->T_me_from_world*T_camera_to_base.inverse();
         scavislam_ros::poseToMessage(T_base_from_world, &pose.pose);
         pose.header.seq = seq++;
         pose.header.stamp = pr.second->time;
@@ -592,10 +595,10 @@ void StereoVSLAMNode::publishPose(const CameraInfoConstPtr& l_info_msg)
 {
     SE3d T_cur;
     frontend->currentPose(T_cur);
-    SE3d T_base_from_camera;
-    if(!lookupCameraTransform(l_info_msg->header.frame_id, &T_base_from_camera))
+    SE3d T_camera_to_base;
+    if(!lookupTransform(l_info_msg->header.frame_id, &T_camera_to_base))
         return;
-    T_cur = T_base_from_camera*T_cur;
+    T_cur = T_camera_to_base*T_cur*T_camera_to_base.inverse();
 
     nav_msgs::Odometry odo;
     odo.header.frame_id = "map";
